@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "server": "node server/start-server.js",
+    "server": "bash server/start-official-server.sh",
+    "server-flying": "node server/start-server.js",
     "demo": "node src/demo.js"
   },
   "dependencies": {
     "axios": "^1.6.7",
+    "canvas": "^3.2.1",
     "dotenv": "^16.4.0",
     "flying-squid": "^1.11.0",
     "minecraft-data": "^3.105.0",
