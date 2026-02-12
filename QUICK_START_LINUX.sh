@@ -37,7 +37,7 @@ cat > package.json << 'EOF'
     "mineflayer-collectblock": "^1.4.1",
     "prismarine-viewer": "^1.28.0",
     "flying-squid": "^1.17.1",
-    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.6.7",
     "dotenv": "^16.4.0"
   }
 }
@@ -51,10 +51,15 @@ npm install
 if [ ! -f .env ]; then
     echo "🔑 Creating .env file..."
     cat > .env << 'EOF'
-ANTHROPIC_API_KEY=your_key_here
+# Get FREE API key at: https://openrouter.ai/keys
+OPENROUTER_API_KEY=your_key_here
 EOF
     echo ""
-    echo "⚠️  IMPORTANT: Edit .env and add your ANTHROPIC_API_KEY"
+    echo "⚠️  IMPORTANT: Get FREE OpenRouter API key"
+    echo "   1. Go to: https://openrouter.ai/keys"
+    echo "   2. Sign in (free, no credit card needed)"
+    echo "   3. Copy your API key"
+    echo "   4. Edit .env and paste it"
     echo ""
 fi
 

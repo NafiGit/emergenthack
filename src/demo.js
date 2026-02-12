@@ -4,21 +4,29 @@
 import mineflayer from 'mineflayer';
 import { pathfinder, Movements, goals } from 'mineflayer-pathfinder';
 import mineflayerViewer from 'prismarine-viewer/viewer/lib/viewer.js';
-import Anthropic from '@anthropic-ai/sdk';
+import axios from 'axios';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 // Check API key
-if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_key_here') {
-  console.error('❌ ANTHROPIC_API_KEY not set in .env file!');
-  console.error('   Edit .env and add your Claude API key');
+if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY === 'your_key_here') {
+  console.error('❌ OPENROUTER_API_KEY not set in .env file!');
+  console.error('   Get a free key at: https://openrouter.ai/keys');
+  console.error('   Then add it to .env file');
   process.exit(1);
 }
 
-const claude = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+// Using free models from OpenRouter
+const FREE_MODELS = {
+  gemini: 'google/gemini-flash-1.5',      // Fast, good quality, FREE
+  llama: 'meta-llama/llama-3.1-8b-instruct:free', // FREE
+  qwen: 'qwen/qwen-2-7b-instruct:free',   // FREE
+};
+
+const MODEL = FREE_MODELS.gemini; // Change this if you want different model
 
 console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
 
@@ -194,19 +202,28 @@ Respond with JSON only:
   console.log(`🧠 ${bot.username} thinking... (tick ${state.tickCount})`);
 
   try {
-    const response = await claude.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
+    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+      model: MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        }
+      ],
       temperature: 0.8,
-      messages: [{
-        role: 'user',
-        content: prompt,
-      }],
+      max_tokens: 300,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://github.com/NafiGit/emergenthack',
+        'X-Title': 'Synapse Forge',
+        'Content-Type': 'application/json',
+      }
     });
 
-    const text = response.content[0].text;
+    const text = response.data.choices[0].message.content;
 
-    // Extract JSON from response (Claude sometimes adds markdown)
+    // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.log(`⚠️  ${bot.username} invalid response, defaulting to wait`);
@@ -219,7 +236,7 @@ Respond with JSON only:
     return decision;
 
   } catch (error) {
-    console.error(`❌ Claude API error for ${bot.username}:`, error.message);
+    console.error(`❌ OpenRouter API error for ${bot.username}:`, error.message);
     return { action: 'wait', thought: 'error occurred', params: {} };
   }
 }

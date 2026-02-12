@@ -31,10 +31,15 @@ if not exist .env (
     echo.
     echo 🔑 Creating .env file...
     (
-        echo ANTHROPIC_API_KEY=your_key_here
+        echo # Get FREE API key at: https://openrouter.ai/keys
+        echo OPENROUTER_API_KEY=your_key_here
     ) > .env
     echo.
-    echo ⚠️  IMPORTANT: Edit .env and add your ANTHROPIC_API_KEY
+    echo ⚠️  IMPORTANT: Get FREE OpenRouter API key
+    echo    1. Go to: https://openrouter.ai/keys
+    echo    2. Sign in (free, no credit card needed^)
+    echo    3. Copy your API key
+    echo    4. Edit .env and paste it
     echo.
 )
 
