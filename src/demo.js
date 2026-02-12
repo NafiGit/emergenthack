@@ -2,10 +2,20 @@
 // 3 AI agents with Claude-powered decision making
 
 import mineflayer from 'mineflayer';
-import { pathfinder, Movements, goals } from 'mineflayer-pathfinder';
-import mineflayerViewer from 'prismarine-viewer/viewer/lib/viewer.js';
+import pathfinderPlugin from 'mineflayer-pathfinder';
+const { pathfinder, Movements, goals } = pathfinderPlugin;
 import axios from 'axios';
 import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+
+// Try to load viewer, but don't crash if it fails
+let mineflayerViewer = null;
+try {
+  const viewerModule = await import('prismarine-viewer');
+  mineflayerViewer = viewerModule.mineflayer;
+} catch (err) {
+  console.log('⚠️  Viewer disabled (canvas not installed - non-critical)');
+}
 
 dotenv.config();
 
@@ -70,7 +80,7 @@ function createAgent(agentConfig) {
     port: 55916,
     username: agentConfig.name,
     auth: 'offline',
-    version: '1.21.1',
+    version: '1.12.2',
   });
 
   bot.agentConfig = agentConfig;
@@ -82,8 +92,8 @@ function createAgent(agentConfig) {
   bot.once('spawn', () => {
     console.log(`✅ ${agentConfig.name} spawned at ${bot.entity.position}`);
 
-    // Attach viewer to first bot
-    if (!viewerAttached) {
+    // Attach viewer to first bot (if available)
+    if (!viewerAttached && mineflayerViewer) {
       try {
         mineflayerViewer(bot, { port: 3002, firstPerson: false });
         console.log('\n🎨 3D Viewer: http://localhost:3002\n');
@@ -263,7 +273,7 @@ async function executeAction(bot, decision) {
         const dir = directions[params.direction] || directions.north;
         const target = bot.entity.position.offset(dir.x, 0, dir.z);
 
-        const mcData = require('minecraft-data')(bot.version);
+        const mcData = minecraftData(bot.version);
         const movements = new Movements(bot, mcData);
         bot.pathfinder.setMovements(movements);
         bot.pathfinder.setGoal(new goals.GoalNear(target.x, target.y, target.z, 1));

@@ -8,13 +8,27 @@ console.log('🎮 Starting Synapse Forge Minecraft Server...\n');
 const server = mcServer.createMCServer({
   'online-mode': false,
   port: 55916,
-  version: '1.21.1',
-  motd: 'Synapse Forge - AI Agent Civilization',
+  version: '1.12.2',
+  motd: 'Synapse Forge',
   'max-players': 20,
   generation: {
-    name: 'superflat', // Flat world for easier demo
+    name: 'superflat',
+    options: {
+      seed: 12345,
+      worldHeight: 256
+    }
   },
+  difficulty: 1,
+  gameMode: 0,
   logging: true,
+  plugins: {},
+  modpe: false,
+  'view-distance': 6,
+  'everybody-op': true,
+  'player-list-text': {
+    header: { text: 'Synapse Forge' },
+    footer: { text: 'AI Agents' }
+  }
 });
 
 server.on('listening', () => {
