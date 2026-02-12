@@ -4,6 +4,7 @@ Minecraft MCP Server - Control Minecraft via RCON for AI agents
 """
 import asyncio
 import json
+import requests
 from typing import Any, Sequence
 from mcrcon import MCRcon
 from mcp.server.models import InitializationOptions
@@ -21,6 +22,7 @@ from mcp.types import (
 RCON_HOST = "localhost"
 RCON_PORT = 25575
 RCON_PASSWORD = "minecraft123"
+BOT_CONTROLLER_URL = "http://localhost:8765"
 
 # Create MCP server
 app = Server("minecraft-agent-controller")
@@ -31,6 +33,14 @@ def execute_rcon_command(command: str) -> str:
         with MCRcon(RCON_HOST, RCON_PASSWORD, port=RCON_PORT) as mcr:
             response = mcr.command(command)
             return response if response else "Command executed successfully"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def call_bot_controller(endpoint: str, data: dict) -> str:
+    """Call the bot controller API."""
+    try:
+        response = requests.post(f"{BOT_CONTROLLER_URL}{endpoint}", json=data, timeout=5)
+        return response.json().get("message", "Success")
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -172,6 +182,73 @@ async def handle_list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {}
             }
+        ),
+        Tool(
+            name="bot_move",
+            description="Move a bot to specific coordinates",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {
+                        "type": "string",
+                        "description": "Bot name (Agent1, Agent2, Agent3, Agent4, or Agent5)"
+                    },
+                    "x": {"type": "number", "description": "X coordinate"},
+                    "y": {"type": "number", "description": "Y coordinate"},
+                    "z": {"type": "number", "description": "Z coordinate"}
+                },
+                "required": ["bot_name", "x", "y", "z"]
+            }
+        ),
+        Tool(
+            name="bot_follow",
+            description="Make a bot follow a player",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {
+                        "type": "string",
+                        "description": "Bot name (Agent1, Agent2, Agent3, Agent4, or Agent5)"
+                    },
+                    "target_name": {
+                        "type": "string",
+                        "description": "Player name to follow"
+                    }
+                },
+                "required": ["bot_name", "target_name"]
+            }
+        ),
+        Tool(
+            name="bot_say",
+            description="Make a bot say something in chat",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {
+                        "type": "string",
+                        "description": "Bot name (Agent1, Agent2, Agent3, Agent4, or Agent5)"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Message to say"
+                    }
+                },
+                "required": ["bot_name", "message"]
+            }
+        ),
+        Tool(
+            name="bot_stop",
+            description="Stop a bot's current movement",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {
+                        "type": "string",
+                        "description": "Bot name (Agent1, Agent2, Agent3, Agent4, or Agent5)"
+                    }
+                },
+                "required": ["bot_name"]
+            }
         )
     ]
 
@@ -233,6 +310,31 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> Sequence[Tex
 
     elif name == "get_player_info":
         response = execute_rcon_command("list")
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_move":
+        bot_name = arguments["bot_name"]
+        x = arguments["x"]
+        y = arguments["y"]
+        z = arguments["z"]
+        response = call_bot_controller("/bot/move", {"bot_name": bot_name, "x": x, "y": y, "z": z})
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_follow":
+        bot_name = arguments["bot_name"]
+        target_name = arguments["target_name"]
+        response = call_bot_controller("/bot/follow", {"bot_name": bot_name, "target_name": target_name})
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_say":
+        bot_name = arguments["bot_name"]
+        message = arguments["message"]
+        response = call_bot_controller("/bot/say", {"bot_name": bot_name, "message": message})
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_stop":
+        bot_name = arguments["bot_name"]
+        response = call_bot_controller("/bot/stop", {"bot_name": bot_name})
         return [TextContent(type="text", text=response)]
 
     else:
