@@ -74,10 +74,10 @@ function createAgent(agentConfig) {
 
   const bot = mineflayer.createBot({
     host: 'localhost',
-    port: 55916,
+    port: 25565,
     username: agentConfig.name,
     auth: 'offline',
-    version: '1.16.2',
+    version: '1.19.2',
   });
 
   bot.agentConfig = agentConfig;

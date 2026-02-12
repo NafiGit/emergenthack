@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "server": "bash server/start-official-server.sh",
+    "server": "node server/start-server.js",
     "server-flying": "node server/start-server.js",
     "demo": "node src/demo.js",
     "api": "node src/api-server.js"

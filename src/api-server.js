@@ -36,7 +36,7 @@ function createBot(name) {
     port: 25565,
     username: name,
     auth: 'offline',
-    version: '1.19.4',
+    version: '1.19.2',
   });
 
   bot.loadPlugin(pathfinder);
