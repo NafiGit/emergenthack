@@ -45,19 +45,8 @@ function createBot(name) {
     console.log(`✅ ${name} connected at ${bot.entity.position}`);
     bots[name.toLowerCase()] = bot;
 
-    // Attach viewer (first-person POV)
-    if (mineflayerViewer) {
-      try {
-        mineflayerViewer(bot, {
-          port: 3002,
-          firstPerson: true,
-          viewDistance: 4,  // Optimized for performance
-        });
-        console.log(`🎮 POV View: http://localhost:3002`);
-      } catch (err) {
-        console.log(`⚠️  Viewer failed:`, err.message);
-      }
-    }
+    // Viewer disabled - using web-client on port 3002 instead
+    console.log(`🎮 View bot at: http://localhost:3002 (connect to server in web client)`);
   });
 
   bot.on('error', (err) => console.error(`❌ ${name} error:`, err.message));
