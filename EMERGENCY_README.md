@@ -11,9 +11,14 @@
 chmod +x QUICK_START_LINUX.sh
 ./QUICK_START_LINUX.sh
 
-# 2. Add API key to .env
+# 2. Get FREE OpenRouter API key
+# Go to: https://openrouter.ai/keys
+# Sign in (free, no credit card!)
+# Copy your API key
+
+# 3. Add to .env
 nano .env
-# Add your ANTHROPIC_API_KEY
+# Add your OPENROUTER_API_KEY
 
 # 3. Start server (Terminal 1)
 npm run server
@@ -35,9 +40,13 @@ git pull origin main
 # 2. Setup (5 minutes)
 QUICK_START_WINDOWS.bat
 
-# 3. Add API key to .env
+# 3. Get FREE OpenRouter API key
+# Go to: https://openrouter.ai/keys
+# Sign in, copy key
+
+# 4. Add to .env
 # Edit .env with Notepad
-# Add your ANTHROPIC_API_KEY
+# Add your OPENROUTER_API_KEY
 
 # 4. Start server (Terminal 1)
 npm run server
