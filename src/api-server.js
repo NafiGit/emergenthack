@@ -70,12 +70,20 @@ app.get('/api/:bot/status', (req, res) => {
   const bot = bots[req.params.bot];
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
+  // Get inventory items
+  const inventory = bot.inventory.items().map(item => ({
+    name: item.name,
+    count: item.count,
+    slot: item.slot
+  }));
+
   res.json({
     name: req.params.bot,
     position: bot.entity.position,
     health: bot.health,
     food: bot.food,
     gamemode: bot.game.gameMode,
+    inventory: inventory
   });
 });
 
@@ -101,30 +109,44 @@ app.post('/api/:bot/goto', async (req, res) => {
   }
 });
 
-// Move bot in direction (relative movement)
+// Move bot in direction (relative movement based on bot's facing direction)
 app.post('/api/:bot/move', async (req, res) => {
   const bot = bots[req.params.bot];
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
-  const { direction, distance = 10 } = req.body;
+  const { direction, distance = 5 } = req.body;
   const pos = bot.entity.position;
+  const yaw = bot.entity.yaw; // Bot's facing direction in radians
 
-  const directions = {
-    forward: { x: 0, z: -distance },
-    back: { x: 0, z: distance },
-    left: { x: -distance, z: 0 },
-    right: { x: distance, z: 0 },
-    up: { x: 0, y: distance, z: 0 },
-    down: { x: 0, y: -distance, z: 0 },
-  };
+  let offsetX = 0;
+  let offsetZ = 0;
+  let offsetY = 0;
 
-  const offset = directions[direction];
-  if (!offset) {
+  // Calculate movement relative to bot's facing direction
+  if (direction === 'forward') {
+    offsetX = -Math.sin(yaw) * distance;
+    offsetZ = -Math.cos(yaw) * distance;
+  } else if (direction === 'back') {
+    offsetX = Math.sin(yaw) * distance;
+    offsetZ = Math.cos(yaw) * distance;
+  } else if (direction === 'left') {
+    // Turn left while moving forward
+    offsetX = -Math.sin(yaw - Math.PI / 2) * distance;
+    offsetZ = -Math.cos(yaw - Math.PI / 2) * distance;
+  } else if (direction === 'right') {
+    // Turn right while moving forward
+    offsetX = -Math.sin(yaw + Math.PI / 2) * distance;
+    offsetZ = -Math.cos(yaw + Math.PI / 2) * distance;
+  } else if (direction === 'up') {
+    offsetY = distance;
+  } else if (direction === 'down') {
+    offsetY = -distance;
+  } else {
     return res.status(400).json({ error: 'Invalid direction. Use: forward, back, left, right, up, down' });
   }
 
   try {
-    const target = pos.offset(offset.x || 0, offset.y || 0, offset.z || 0);
+    const target = pos.offset(offsetX, offsetY, offsetZ);
     const mcData = minecraftData(bot.version);
     const movements = new Movements(bot, mcData);
     bot.pathfinder.setMovements(movements);
