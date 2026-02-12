@@ -31,12 +31,13 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // Using free models from OpenRouter
 const FREE_MODELS = {
-  gemini: 'google/gemini-flash-1.5',      // Fast, good quality, FREE
+  gemini: 'google/gemini-flash-1.5-8b',      // Fast, good quality, FREE
   llama: 'meta-llama/llama-3.1-8b-instruct:free', // FREE
-  qwen: 'qwen/qwen-2-7b-instruct:free',   // FREE
+  qwen: 'qwen/qwen-2.5-7b-instruct:free',   // FREE
+  phi: 'microsoft/phi-3-medium-128k-instruct:free', // FREE
 };
 
-const MODEL = FREE_MODELS.gemini; // Change this if you want different model
+const MODEL = FREE_MODELS.llama; // Using Llama 3.1 (most stable free model)
 
 console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
 
@@ -80,7 +81,7 @@ function createAgent(agentConfig) {
     port: 55916,
     username: agentConfig.name,
     auth: 'offline',
-    version: '1.12.2',
+    version: '1.16.2',
   });
 
   bot.agentConfig = agentConfig;
