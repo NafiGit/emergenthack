@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bot Controller - WASD Controls</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    .subtitle {
+      text-align: center;
+      opacity: 0.9;
+      margin-bottom: 30px;
+    }
+    .bot-selector {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .bot-btn {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid white;
+      color: white;
+      padding: 15px 30px;
+      margin: 0 10px;
+      border-radius: 10px;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .bot-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: scale(1.05);
+    }
+    .bot-btn.active {
+      background: white;
+      color: #667eea;
+      font-weight: bold;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 30px;
+    }
+    .panel {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 25px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 1.5em;
+      border-bottom: 2px solid rgba(255,255,255,0.3);
+      padding-bottom: 10px;
+    }
+    .keyboard {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      gap: 10px;
+      justify-content: center;
+      margin: 20px 0;
+    }
+    .key {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid white;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.1s;
+      user-select: none;
+    }
+    .key:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .key:active, .key.pressed {
+      background: white;
+      color: #667eea;
+      transform: scale(0.95);
+    }
+    .key.empty {
+      background: transparent;
+      border: none;
+    }
+    .action-btn {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid white;
+      color: white;
+      padding: 12px 20px;
+      margin: 5px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    .action-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .action-btn:active {
+      transform: scale(0.95);
+    }
+    .status {
+      background: rgba(0,0,0,0.3);
+      padding: 15px;
+      border-radius: 10px;
+      margin: 15px 0;
+      font-family: 'Courier New', monospace;
+    }
+    .chat-input {
+      width: calc(100% - 100px);
+      padding: 10px;
+      border-radius: 5px;
+      border: 2px solid white;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      font-size: 16px;
+    }
+    .chat-input::placeholder {
+      color: rgba(255,255,255,0.7);
+    }
+    .send-btn {
+      width: 80px;
+      margin-left: 10px;
+    }
+    .info {
+      text-align: center;
+      margin-top: 20px;
+      opacity: 0.8;
+      font-size: 14px;
+    }
+    .links {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .link-btn {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid white;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.3s;
+    }
+    .link-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 Bot Controller</h1>
+    <p class="subtitle">Control your Minecraft bots with WASD or arrow keys</p>
+
+    <div class="bot-selector">
+      <button class="bot-btn active" data-bot="vulkan">🔥 Vulkan</button>
+      <button class="bot-btn" data-bot="terra">🌍 Terra</button>
+      <button class="bot-btn" data-bot="sage">🏗️ Sage</button>
+    </div>
+
+    <div class="status" id="status">
+      Bot: Vulkan | Position: Loading... | Health: -- | Food: --
+    </div>
+
+    <div class="controls">
+      <div class="panel">
+        <h2>⌨️ Movement (WASD)</h2>
+        <div class="keyboard">
+          <div class="key empty"></div>
+          <div class="key" data-key="w" data-action="forward">W<br><small>↑</small></div>
+          <div class="key empty"></div>
+          <div class="key" data-key="a" data-action="left">A<br><small>←</small></div>
+          <div class="key" data-key="s" data-action="back">S<br><small>↓</small></div>
+          <div class="key" data-key="d" data-action="right">D<br><small>→</small></div>
+        </div>
+        <div style="text-align: center;">
+          <button class="action-btn" id="jumpBtn">Space - Jump</button>
+          <button class="action-btn" id="stopBtn">X - Stop</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>💬 Chat</h2>
+        <input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
+        <button class="action-btn send-btn" id="sendBtn">Send</button>
+        <div style="margin-top: 15px;">
+          <button class="action-btn" onclick="quickChat('Hello everyone!')">👋 Hello</button>
+          <button class="action-btn" onclick="quickChat('I found something interesting!')">🔍 Found something</button>
+          <button class="action-btn" onclick="quickChat('Coming!')">🏃 Coming</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="links">
+      <a href="http://localhost:3002" target="_blank" class="link-btn">🔥 Vulkan's Camera</a>
+      <a href="http://localhost:3003" target="_blank" class="link-btn">🌍 Terra's Camera</a>
+      <a href="http://localhost:3004" target="_blank" class="link-btn">🏗️ Sage's Camera</a>
+    </div>
+
+    <div class="info">
+      Use WASD or Arrow keys to move | Space to jump | X to stop | Click camera links to view bots
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:4000/api';
+    let selectedBot = 'vulkan';
+    const pressedKeys = new Set();
+
+    // Bot selection
+    document.querySelectorAll('.bot-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.bot-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedBot = btn.dataset.bot;
+        updateStatus();
+      });
+    });
+
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (pressedKeys.has(key)) return;
+      pressedKeys.add(key);
+
+      const keyElement = document.querySelector(`[data-key="${key}"]`);
+      if (keyElement) {
+        keyElement.classList.add('pressed');
+        const action = keyElement.dataset.action;
+        if (action) moveBot(action);
+      }
+
+      // Arrow keys
+      const arrowMap = { 'arrowup': 'forward', 'arrowdown': 'back', 'arrowleft': 'left', 'arrowright': 'right' };
+      if (arrowMap[key]) {
+        moveBot(arrowMap[key]);
+      }
+
+      // Space to jump
+      if (key === ' ') {
+        e.preventDefault();
+        jumpBot();
+      }
+
+      // X to stop
+      if (key === 'x') {
+        stopBot();
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      pressedKeys.delete(key);
+      const keyElement = document.querySelector(`[data-key="${key}"]`);
+      if (keyElement) keyElement.classList.remove('pressed');
+    });
+
+    // Click controls
+    document.querySelectorAll('.key').forEach(key => {
+      key.addEventListener('click', () => {
+        const action = key.dataset.action;
+        if (action) moveBot(action);
+      });
+    });
+
+    document.getElementById('jumpBtn').addEventListener('click', jumpBot);
+    document.getElementById('stopBtn').addEventListener('click', stopBot);
+    document.getElementById('sendBtn').addEventListener('click', sendChat);
+    document.getElementById('chatInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendChat();
+    });
+
+    // API calls
+    async function moveBot(direction) {
+      try {
+        const response = await fetch(`${API_URL}/${selectedBot}/move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ direction, distance: 5 })
+        });
+        const data = await response.json();
+        console.log(data.message);
+      } catch (error) {
+        console.error('Error moving bot:', error);
+      }
+    }
+
+    async function jumpBot() {
+      try {
+        const response = await fetch(`${API_URL}/${selectedBot}/jump`, { method: 'POST' });
+        const data = await response.json();
+        console.log(data.message);
+      } catch (error) {
+        console.error('Error jumping:', error);
+      }
+    }
+
+    async function stopBot() {
+      try {
+        const response = await fetch(`${API_URL}/${selectedBot}/stop`, { method: 'POST' });
+        const data = await response.json();
+        console.log(data.message);
+      } catch (error) {
+        console.error('Error stopping:', error);
+      }
+    }
+
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      try {
+        const response = await fetch(`${API_URL}/${selectedBot}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        console.log(data.message);
+        input.value = '';
+      } catch (error) {
+        console.error('Error sending chat:', error);
+      }
+    }
+
+    function quickChat(message) {
+      document.getElementById('chatInput').value = message;
+      sendChat();
+    }
+
+    async function updateStatus() {
+      try {
+        const response = await fetch(`${API_URL}/${selectedBot}/status`);
+        const data = await response.json();
+        const pos = data.position;
+        document.getElementById('status').textContent =
+          `Bot: ${data.name.toUpperCase()} | Position: (${Math.floor(pos.x)}, ${Math.floor(pos.y)}, ${Math.floor(pos.z)}) | Health: ${data.health}/20 | Food: ${data.food}/20`;
+      } catch (error) {
+        document.getElementById('status').textContent = 'Error loading bot status';
+      }
+    }
+
+    // Update status every 2 seconds
+    setInterval(updateStatus, 2000);
+    updateStatus();
+  </script>
+</body>
+</html>

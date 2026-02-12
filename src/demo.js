@@ -62,7 +62,6 @@ const AGENTS = [
 
 // Create bots
 const bots = [];
-let viewerAttached = false;
 
 AGENTS.forEach((agent, index) => {
   setTimeout(() => {
@@ -90,14 +89,15 @@ function createAgent(agentConfig) {
   bot.once('spawn', () => {
     console.log(`✅ ${agentConfig.name} spawned at ${bot.entity.position}`);
 
-    // Attach viewer to first bot (if available)
-    if (!viewerAttached && mineflayerViewer) {
+    // Attach viewer to each bot on different ports
+    if (mineflayerViewer) {
       try {
-        mineflayerViewer(bot, { port: 3002, firstPerson: false });
-        console.log('\n🎨 3D Viewer: http://localhost:3002\n');
-        viewerAttached = true;
+        const portMap = { 'Vulkan': 3002, 'Terra': 3003, 'Sage': 3004 };
+        const port = portMap[agentConfig.name] || 3005;
+        mineflayerViewer(bot, { port: port, firstPerson: false });
+        console.log(`\n🎨 ${agentConfig.name}'s View: http://localhost:${port}\n`);
       } catch (err) {
-        console.log('⚠️  Viewer failed (non-critical):', err.message);
+        console.log(`⚠️  Viewer failed for ${agentConfig.name} (non-critical):`, err.message);
       }
     }
 
@@ -320,4 +320,7 @@ process.on('SIGINT', () => {
 
 console.log('⏳ Agents will spawn in 3-second intervals...');
 console.log('📊 Watch console for agent decisions');
-console.log('🌐 Open http://localhost:3002 for 3D view (once first bot spawns)\n');
+console.log('🌐 3D Views (one for each bot):');
+console.log('   🔥 Vulkan: http://localhost:3002');
+console.log('   🌍 Terra:  http://localhost:3003');
+console.log('   🏗️  Sage:   http://localhost:3004\n');
