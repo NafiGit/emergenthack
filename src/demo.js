@@ -2,10 +2,20 @@
 // 3 AI agents with Claude-powered decision making
 
 import mineflayer from 'mineflayer';
-import { pathfinder, Movements, goals } from 'mineflayer-pathfinder';
-import mineflayerViewer from 'prismarine-viewer/viewer/lib/viewer.js';
+import pathfinderPlugin from 'mineflayer-pathfinder';
+const { pathfinder, Movements, goals } = pathfinderPlugin;
 import axios from 'axios';
 import dotenv from 'dotenv';
+import minecraftData from 'minecraft-data';
+
+// Try to load viewer, but don't crash if it fails
+let mineflayerViewer = null;
+try {
+  const viewerModule = await import('prismarine-viewer');
+  mineflayerViewer = viewerModule.mineflayer;
+} catch (err) {
+  console.log('⚠️  Viewer disabled (canvas not installed - non-critical)');
+}
 
 dotenv.config();
 
@@ -21,12 +31,10 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // Using free models from OpenRouter
 const FREE_MODELS = {
-  gemini: 'google/gemini-flash-1.5',      // Fast, good quality, FREE
-  llama: 'meta-llama/llama-3.1-8b-instruct:free', // FREE
-  qwen: 'qwen/qwen-2-7b-instruct:free',   // FREE
+  llama: 'meta-llama/llama-3.3-70b-instruct:free', // FREE - VERIFIED WORKING
 };
 
-const MODEL = FREE_MODELS.gemini; // Change this if you want different model
+const MODEL = FREE_MODELS.llama; // Using Llama 3.3 70B (verified free model)
 
 console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
 
@@ -54,7 +62,6 @@ const AGENTS = [
 
 // Create bots
 const bots = [];
-let viewerAttached = false;
 
 AGENTS.forEach((agent, index) => {
   setTimeout(() => {
@@ -70,7 +77,7 @@ function createAgent(agentConfig) {
     port: 55916,
     username: agentConfig.name,
     auth: 'offline',
-    version: '1.21.1',
+    version: '1.16.2',
   });
 
   bot.agentConfig = agentConfig;
@@ -82,14 +89,15 @@ function createAgent(agentConfig) {
   bot.once('spawn', () => {
     console.log(`✅ ${agentConfig.name} spawned at ${bot.entity.position}`);
 
-    // Attach viewer to first bot
-    if (!viewerAttached) {
+    // Attach viewer to each bot on different ports
+    if (mineflayerViewer) {
       try {
-        mineflayerViewer(bot, { port: 3002, firstPerson: false });
-        console.log('\n🎨 3D Viewer: http://localhost:3002\n');
-        viewerAttached = true;
+        const portMap = { 'Vulkan': 3002, 'Terra': 3003, 'Sage': 3004 };
+        const port = portMap[agentConfig.name] || 3005;
+        mineflayerViewer(bot, { port: port, firstPerson: false });
+        console.log(`\n🎨 ${agentConfig.name}'s View: http://localhost:${port}\n`);
       } catch (err) {
-        console.log('⚠️  Viewer failed (non-critical):', err.message);
+        console.log(`⚠️  Viewer failed for ${agentConfig.name} (non-critical):`, err.message);
       }
     }
 
@@ -263,7 +271,7 @@ async function executeAction(bot, decision) {
         const dir = directions[params.direction] || directions.north;
         const target = bot.entity.position.offset(dir.x, 0, dir.z);
 
-        const mcData = require('minecraft-data')(bot.version);
+        const mcData = minecraftData(bot.version);
         const movements = new Movements(bot, mcData);
         bot.pathfinder.setMovements(movements);
         bot.pathfinder.setGoal(new goals.GoalNear(target.x, target.y, target.z, 1));
@@ -312,4 +320,7 @@ process.on('SIGINT', () => {
 
 console.log('⏳ Agents will spawn in 3-second intervals...');
 console.log('📊 Watch console for agent decisions');
-console.log('🌐 Open http://localhost:3002 for 3D view (once first bot spawns)\n');
+console.log('🌐 3D Views (one for each bot):');
+console.log('   🔥 Vulkan: http://localhost:3002');
+console.log('   🌍 Terra:  http://localhost:3003');
+console.log('   🏗️  Sage:   http://localhost:3004\n');
