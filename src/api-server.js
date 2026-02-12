@@ -4,6 +4,7 @@ import mineflayer from 'mineflayer';
 import pathfinderPlugin from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pathfinderPlugin;
 import minecraftData from 'minecraft-data';
+import { Vec3 } from 'vec3';
 import { eventBus } from './eventBus.js';
 
 // Try to load viewer
@@ -32,10 +33,10 @@ function createBot(name) {
 
   const bot = mineflayer.createBot({
     host: 'localhost',
-    port: 55916,
+    port: 25565,
     username: name,
     auth: 'offline',
-    version: '1.16.2',
+    version: '1.19.4',
   });
 
   bot.loadPlugin(pathfinder);
@@ -77,13 +78,26 @@ app.get('/api/:bot/status', (req, res) => {
     slot: item.slot
   }));
 
-  // Get block bot is looking at
+  // Get block or entity bot is looking at
   let lookingAt = null;
   const block = bot.blockAtCursor(5); // 5 blocks reach
   if (block) {
     lookingAt = {
+      type: 'block',
       name: block.name,
       position: block.position
+    };
+  }
+
+  // Check for entity in crosshair
+  const entity = bot.entityAtCursor(5);
+  if (entity) {
+    lookingAt = {
+      type: 'entity',
+      name: entity.name || entity.displayName || entity.type,
+      entityType: entity.type,
+      health: entity.metadata?.[8], // Entity health
+      position: entity.position
     };
   }
 
@@ -94,7 +108,14 @@ app.get('/api/:bot/status', (req, res) => {
     food: bot.food,
     gamemode: bot.game.gameMode,
     inventory: inventory,
-    lookingAt: lookingAt
+    lookingAt: lookingAt,
+    nearbyEntities: Object.values(bot.entities).filter(e =>
+      e.type === 'mob' || e.type === 'player' || e.type === 'animal'
+    ).slice(0, 5).map(e => ({
+      name: e.name || e.displayName,
+      type: e.type,
+      distance: bot.entity.position.distanceTo(e.position)
+    }))
   });
 });
 
@@ -307,12 +328,16 @@ app.post('/api/:bot/break', async (req, res) => {
       return res.json({ success: false, message: 'Not looking at a block' });
     }
 
-    // Equip best tool for the job
-    const mcData = minecraftData(bot.version);
-    await bot.tool.equipForBlock(block, { requireHarvest: false });
+    // Can't break bedrock or air
+    if (block.name === 'bedrock' || block.name === 'air') {
+      return res.json({ success: false, message: 'Cannot break this block' });
+    }
 
-    // Mine the block
-    await bot.dig(block);
+    // Swing arm for animation
+    bot.swingArm();
+
+    // Dig the block with whatever is in hand (shows breaking animation)
+    await bot.dig(block, true); // true = swing arm while digging
 
     eventBus.publish('BREAK', {
       agent: req.params.bot,
@@ -348,12 +373,28 @@ app.post('/api/:bot/place', async (req, res) => {
       return res.json({ success: false, message: 'No item in slot' });
     }
 
+    // Check if item is a placeable block
+    if (!item.name.includes('dirt') && !item.name.includes('stone') &&
+        !item.name.includes('wood') && !item.name.includes('planks') &&
+        !item.name.includes('cobblestone') && !item.name.includes('log') &&
+        !item.name.includes('sand') && !item.name.includes('gravel') &&
+        !item.name.includes('glass') && !item.name.includes('wool') &&
+        !item.name.includes('brick')) {
+      return res.json({ success: false, message: 'Item is not a block' });
+    }
+
     // Equip the item
     await bot.equip(item, 'hand');
 
     // Place block against the reference block
-    const faceVector = new bot.vec3(0, 1, 0); // Place on top
-    await bot.placeBlock(referenceBlock, faceVector);
+    try {
+      await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
+    } catch (placeError) {
+      // Placement might timeout but still succeed - that's ok
+      if (!placeError.message.includes('timeout')) {
+        throw placeError;
+      }
+    }
 
     eventBus.publish('PLACE', {
       agent: req.params.bot,
@@ -362,6 +403,132 @@ app.post('/api/:bot/place', async (req, res) => {
     });
 
     res.json({ success: true, item: item.name });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Attack entity (animals, mobs, players)
+app.post('/api/:bot/attack', async (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  try {
+    const entity = bot.entityAtCursor(5);
+    if (!entity) {
+      return res.json({ success: false, message: 'Not looking at an entity' });
+    }
+
+    // Swing arm for attack animation
+    bot.swingArm();
+
+    // Attack the entity
+    await bot.attack(entity);
+
+    eventBus.publish('ATTACK', {
+      agent: req.params.bot,
+      source: 'manual',
+      data: {
+        target: entity.name || entity.displayName || entity.type,
+        targetType: entity.type
+      }
+    });
+
+    res.json({
+      success: true,
+      target: entity.name || entity.displayName || entity.type,
+      type: entity.type
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eat food (use item in hand)
+app.post('/api/:bot/eat', async (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  try {
+    const { slot = 0 } = req.body;
+
+    // Get item from hotbar
+    const hotbarSlot = 36 + slot;
+    const item = bot.inventory.slots[hotbarSlot];
+
+    if (!item) {
+      return res.json({ success: false, message: 'No item in slot' });
+    }
+
+    // Check if item is food
+    if (!item.name.includes('beef') && !item.name.includes('pork') &&
+        !item.name.includes('bread') && !item.name.includes('apple') &&
+        !item.name.includes('carrot') && !item.name.includes('potato') &&
+        !item.name.includes('fish') && !item.name.includes('chicken') &&
+        !item.name.includes('mutton') && !item.name.includes('rabbit')) {
+      return res.json({ success: false, message: 'Item is not food' });
+    }
+
+    // Equip and eat
+    await bot.equip(item, 'hand');
+    await bot.consume();
+
+    eventBus.publish('EAT', {
+      agent: req.params.bot,
+      source: 'manual',
+      data: { food: item.name }
+    });
+
+    res.json({ success: true, food: item.name, health: bot.health, food: bot.food });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Drop item from inventory
+app.post('/api/:bot/drop', async (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  try {
+    const { slot = 0, count = 1 } = req.body;
+
+    const hotbarSlot = 36 + slot;
+    const item = bot.inventory.slots[hotbarSlot];
+
+    if (!item) {
+      return res.json({ success: false, message: 'No item in slot' });
+    }
+
+    await bot.toss(item.type, null, count);
+
+    res.json({ success: true, dropped: item.name, count });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Activate/use item or block (right click action)
+app.post('/api/:bot/activate', async (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  try {
+    // Try to activate block
+    const block = bot.blockAtCursor(5);
+    if (block) {
+      await bot.activateBlock(block);
+      return res.json({ success: true, activated: block.name });
+    }
+
+    // Try to activate entity
+    const entity = bot.entityAtCursor(5);
+    if (entity) {
+      await bot.activateEntity(entity);
+      return res.json({ success: true, activated: entity.name || entity.type });
+    }
+
+    res.json({ success: false, message: 'Nothing to activate' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

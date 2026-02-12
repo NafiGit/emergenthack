@@ -6,6 +6,8 @@ node_modules/
 
 # Logs
 *.log
+*.log.*
+logs/
 
 # OS files
 .DS_Store
@@ -14,12 +16,39 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.cursor/
 
-# Minecraft server files
-server/world/
-server/logs/
+# Minecraft Server Files
 *.jar
+*.jar.backup
+*.jar.bak
+server.properties
+eula.txt
+ops.json
+whitelist.json
+banned-*.json
+usercache.json
+session.lock
+libraries/
+versions/
+
+# Minecraft World Data (generated, can be large)
+world/
+DIM-1/
+DIM1/
 
 # Database
 *.db
+*.db-*
 data/
+
+# Web Client
+web-client/node_modules/
+web-client/dist/
+web-client/.pnpm-store/
+web-client/generated/
+web-client/.git/
+web-client/.cursor/
+
+# Agent Logs
+agents/*/
