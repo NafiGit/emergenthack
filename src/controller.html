@@ -172,13 +172,11 @@
     <p class="subtitle">Control your Minecraft bots with WASD or arrow keys</p>
 
     <div class="bot-selector">
-      <button class="bot-btn active" data-bot="vulkan">🔥 Vulkan</button>
-      <button class="bot-btn" data-bot="terra">🌍 Terra</button>
-      <button class="bot-btn" data-bot="sage">🏗️ Sage</button>
+      <button class="bot-btn active" data-bot="nafi">🎮 Nafi</button>
     </div>
 
     <div class="status" id="status">
-      Bot: Vulkan | Position: Loading... | Health: -- | Food: --
+      Bot: Nafi | Position: Loading... | Health: -- | Food: --
     </div>
 
     <div class="controls">
@@ -211,9 +209,8 @@
     </div>
 
     <div class="links">
-      <a href="http://localhost:3002" target="_blank" class="link-btn">🔥 Vulkan's Camera</a>
-      <a href="http://localhost:3003" target="_blank" class="link-btn">🌍 Terra's Camera</a>
-      <a href="http://localhost:3004" target="_blank" class="link-btn">🏗️ Sage's Camera</a>
+      <a href="http://localhost:3002" target="_blank" class="link-btn">🎮 Nafi's Camera (POV)</a>
+      <a href="http://localhost:4000/game.html" target="_blank" class="link-btn">🎯 Full Game Interface</a>
     </div>
 
     <div class="info">
@@ -223,7 +220,7 @@
 
   <script>
     const API_URL = 'http://localhost:4000/api';
-    let selectedBot = 'vulkan';
+    let selectedBot = 'nafi';
     const pressedKeys = new Set();
 
     // Bot selection

@@ -23,12 +23,9 @@ app.use(express.static('src')); // Serve static files from src directory
 // Store bot instances
 const bots = {};
 
-// Create 3 bots
-const AGENTS = ['Vulkan', 'Terra', 'Sage'];
-
-AGENTS.forEach((name, index) => {
-  setTimeout(() => createBot(name), index * 3000);
-});
+// Create single bot named nafi
+const AGENT_NAME = 'nafi';
+createBot(AGENT_NAME);
 
 function createBot(name) {
   console.log(`🤖 Connecting ${name}...`);
@@ -47,15 +44,17 @@ function createBot(name) {
     console.log(`✅ ${name} connected at ${bot.entity.position}`);
     bots[name.toLowerCase()] = bot;
 
-    // Attach viewer to each bot on different ports
+    // Attach viewer (first-person POV)
     if (mineflayerViewer) {
       try {
-        const portMap = { 'Vulkan': 3002, 'Terra': 3003, 'Sage': 3004 };
-        const port = portMap[name] || 3005;
-        mineflayerViewer(bot, { port: port, firstPerson: true });
-        console.log(`🎨 ${name}'s View: http://localhost:${port}`);
+        mineflayerViewer(bot, {
+          port: 3002,
+          firstPerson: true,
+          viewDistance: 4,  // Optimized for performance
+        });
+        console.log(`🎮 POV View: http://localhost:3002`);
       } catch (err) {
-        console.log(`⚠️  Viewer failed for ${name}:`, err.message);
+        console.log(`⚠️  Viewer failed:`, err.message);
       }
     }
   });
@@ -78,13 +77,24 @@ app.get('/api/:bot/status', (req, res) => {
     slot: item.slot
   }));
 
+  // Get block bot is looking at
+  let lookingAt = null;
+  const block = bot.blockAtCursor(5); // 5 blocks reach
+  if (block) {
+    lookingAt = {
+      name: block.name,
+      position: block.position
+    };
+  }
+
   res.json({
     name: req.params.bot,
     position: bot.entity.position,
     health: bot.health,
     food: bot.food,
     gamemode: bot.game.gameMode,
-    inventory: inventory
+    inventory: inventory,
+    lookingAt: lookingAt
   });
 });
 
@@ -121,48 +131,41 @@ app.post('/api/:bot/goto', async (req, res) => {
   }
 });
 
-// Move bot in direction (relative movement based on bot's facing direction)
+// Move bot in direction (smooth control states - no pathfinding)
 app.post('/api/:bot/move', async (req, res) => {
   const bot = bots[req.params.bot];
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
-  const { direction, distance = 5 } = req.body;
+  const { direction, duration = 200 } = req.body; // Short burst of movement
   const pos = bot.entity.position;
-  const yaw = bot.entity.yaw; // Bot's facing direction in radians
-
-  let offsetX = 0;
-  let offsetZ = 0;
-  let offsetY = 0;
-
-  // Calculate movement relative to bot's facing direction
-  if (direction === 'forward') {
-    offsetX = -Math.sin(yaw) * distance;
-    offsetZ = -Math.cos(yaw) * distance;
-  } else if (direction === 'back') {
-    offsetX = Math.sin(yaw) * distance;
-    offsetZ = Math.cos(yaw) * distance;
-  } else if (direction === 'left') {
-    // Turn left while moving forward
-    offsetX = -Math.sin(yaw - Math.PI / 2) * distance;
-    offsetZ = -Math.cos(yaw - Math.PI / 2) * distance;
-  } else if (direction === 'right') {
-    // Turn right while moving forward
-    offsetX = -Math.sin(yaw + Math.PI / 2) * distance;
-    offsetZ = -Math.cos(yaw + Math.PI / 2) * distance;
-  } else if (direction === 'up') {
-    offsetY = distance;
-  } else if (direction === 'down') {
-    offsetY = -distance;
-  } else {
-    return res.status(400).json({ error: 'Invalid direction. Use: forward, back, left, right, up, down' });
-  }
 
   try {
-    const target = pos.offset(offsetX, offsetY, offsetZ);
-    const mcData = minecraftData(bot.version);
-    const movements = new Movements(bot, mcData);
-    bot.pathfinder.setMovements(movements);
-    bot.pathfinder.setGoal(new goals.GoalNear(target.x, target.y, target.z, 1));
+    // Stop any ongoing pathfinding first
+    bot.pathfinder.setGoal(null);
+
+    if (direction === 'forward') {
+      // Walk forward (uses control state, not pathfinding)
+      bot.setControlState('forward', true);
+      setTimeout(() => bot.setControlState('forward', false), duration);
+    } else if (direction === 'back') {
+      // Walk backward
+      bot.setControlState('back', true);
+      setTimeout(() => bot.setControlState('back', false), duration);
+    } else if (direction === 'left') {
+      // ONLY rotate camera left (no movement!)
+      bot.look(bot.entity.yaw - Math.PI / 16, bot.entity.pitch, true);
+    } else if (direction === 'right') {
+      // ONLY rotate camera right (no movement!)
+      bot.look(bot.entity.yaw + Math.PI / 16, bot.entity.pitch, true);
+    } else if (direction === 'up') {
+      // Look up
+      bot.look(bot.entity.yaw, Math.max(bot.entity.pitch - Math.PI / 16, -Math.PI / 2), true);
+    } else if (direction === 'down') {
+      // Look down
+      bot.look(bot.entity.yaw, Math.min(bot.entity.pitch + Math.PI / 16, Math.PI / 2), true);
+    } else {
+      return res.status(400).json({ error: 'Invalid direction. Use: forward, back, left, right, up, down' });
+    }
 
     // Publish event to event bus
     eventBus.publish('MOVE', {
@@ -170,13 +173,11 @@ app.post('/api/:bot/move', async (req, res) => {
       source: 'manual',
       data: {
         direction,
-        from: { x: pos.x, y: pos.y, z: pos.z },
-        to: { x: target.x, y: target.y, z: target.z },
-        distance
+        position: { x: pos.x, y: pos.y, z: pos.z }
       }
     });
 
-    res.json({ success: true, message: `${req.params.bot} moving ${direction}` });
+    res.json({ success: true, message: `${req.params.bot} ${direction}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -238,11 +239,37 @@ app.post('/api/:bot/look', async (req, res) => {
   }
 });
 
+// Mouse look (set yaw/pitch directly for smooth camera control)
+app.post('/api/:bot/mouselook', (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const { deltaX, deltaY, sensitivity = 0.003 } = req.body;
+
+  if (deltaX === undefined && deltaY === undefined) {
+    return res.status(400).json({ error: 'Missing deltaX or deltaY' });
+  }
+
+  // Update yaw (horizontal) and pitch (vertical)
+  const newYaw = bot.entity.yaw + (deltaX || 0) * sensitivity;
+  const newPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, bot.entity.pitch + (deltaY || 0) * sensitivity));
+
+  bot.look(newYaw, newPitch, true);
+
+  res.json({ success: true, yaw: newYaw, pitch: newPitch });
+});
+
 // Stop movement
 app.post('/api/:bot/stop', (req, res) => {
   const bot = bots[req.params.bot];
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
+  // Stop all control states
+  bot.setControlState('forward', false);
+  bot.setControlState('back', false);
+  bot.setControlState('left', false);
+  bot.setControlState('right', false);
+  bot.setControlState('jump', false);
   bot.pathfinder.setGoal(null);
 
   // Publish event to event bus
@@ -253,6 +280,91 @@ app.post('/api/:bot/stop', (req, res) => {
   });
 
   res.json({ success: true, message: `${req.params.bot} stopped` });
+});
+
+// Control state (for smooth WASD movement + sprint)
+app.post('/api/:bot/control', (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const { state, active } = req.body;
+  if (state === undefined || active === undefined) {
+    return res.status(400).json({ error: 'Missing state or active' });
+  }
+
+  bot.setControlState(state, active);
+  res.json({ success: true, state, active });
+});
+
+// Break block (mine what you're looking at)
+app.post('/api/:bot/break', async (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  try {
+    const block = bot.blockAtCursor(5);
+    if (!block) {
+      return res.json({ success: false, message: 'Not looking at a block' });
+    }
+
+    // Equip best tool for the job
+    const mcData = minecraftData(bot.version);
+    await bot.tool.equipForBlock(block, { requireHarvest: false });
+
+    // Mine the block
+    await bot.dig(block);
+
+    eventBus.publish('BREAK', {
+      agent: req.params.bot,
+      source: 'manual',
+      data: { block: block.name, position: block.position }
+    });
+
+    res.json({ success: true, block: block.name });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Place block (place from hotbar)
+app.post('/api/:bot/place', async (req, res) => {
+  const bot = bots[req.params.bot];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  try {
+    const { slot = 0 } = req.body;
+
+    // Get block we're looking at (to place against)
+    const referenceBlock = bot.blockAtCursor(5);
+    if (!referenceBlock) {
+      return res.json({ success: false, message: 'Not looking at a block' });
+    }
+
+    // Get item from hotbar slot (slots 36-44 are hotbar)
+    const hotbarSlot = 36 + slot;
+    const item = bot.inventory.slots[hotbarSlot];
+
+    if (!item) {
+      return res.json({ success: false, message: 'No item in slot' });
+    }
+
+    // Equip the item
+    await bot.equip(item, 'hand');
+
+    // Place block against the reference block
+    const faceVector = new bot.vec3(0, 1, 0); // Place on top
+    await bot.placeBlock(referenceBlock, faceVector);
+
+    eventBus.publish('PLACE', {
+      agent: req.params.bot,
+      source: 'manual',
+      data: { item: item.name, position: referenceBlock.position }
+    });
+
+    res.json({ success: true, item: item.name });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // List all bots
@@ -271,14 +383,18 @@ app.listen(PORT, () => {
   console.log(`\n🌐 API Server running on http://localhost:${PORT}`);
   console.log(`\n📖 Available endpoints:`);
   console.log(`   GET  /api/bots - List all bots`);
-  console.log(`   GET  /api/:bot/status - Get bot status`);
+  console.log(`   GET  /api/:bot/status - Get bot status, inventory, looking at`);
   console.log(`   POST /api/:bot/goto - Move to coordinates {"x": 0, "y": 70, "z": 0}`);
-  console.log(`   POST /api/:bot/move - Move in direction {"direction": "forward", "distance": 10}`);
+  console.log(`   POST /api/:bot/move - Move in direction {"direction": "forward", "duration": 200}`);
+  console.log(`   POST /api/:bot/control - Set control state {"state": "forward", "active": true}`);
+  console.log(`   POST /api/:bot/mouselook - Mouse look {"deltaX": 10, "deltaY": 5, "sensitivity": 0.005}`);
+  console.log(`   POST /api/:bot/break - Break block you're looking at`);
+  console.log(`   POST /api/:bot/place - Place block {"slot": 0}`);
   console.log(`   POST /api/:bot/chat - Send chat {"message": "Hello!"}`);
   console.log(`   POST /api/:bot/jump - Make bot jump`);
   console.log(`   POST /api/:bot/look - Look at coordinates {"x": 0, "y": 70, "z": 0}`);
-  console.log(`   POST /api/:bot/stop - Stop movement`);
-  console.log(`\n   Replace :bot with: vulkan, terra, or sage\n`);
+  console.log(`   POST /api/:bot/stop - Stop all movement`);
+  console.log(`\n   🎮 Bot name: nafi\n`);
 });
 
 // Graceful shutdown

@@ -253,21 +253,20 @@
     <div class="header">
       <div class="title">🎮 Bot Viewer</div>
       <div class="bot-selector">
-        <button class="bot-btn active" data-bot="vulkan" data-port="3002">🔥 Vulkan</button>
-        <button class="bot-btn" data-bot="terra" data-port="3003">🌍 Terra</button>
-        <button class="bot-btn" data-bot="sage" data-port="3004">🏗️ Sage</button>
+        <button class="bot-btn active" data-bot="nafi" data-port="3002">🎮 Nafi</button>
       </div>
     </div>
 
     <div class="status-bar">
-      <div id="status">Bot: Vulkan | Position: Loading...</div>
+      <div id="status">Bot: Nafi | Position: Loading...</div>
       <div class="health-food-bar">
         <div class="hearts" id="hearts"></div>
         <div class="food-bar" id="foodBar"></div>
       </div>
       <div class="controls-hint">
-        <span class="hint">Click arrows to move</span>
-        <span class="hint">Or use WASD keys</span>
+        <span class="hint">🖱️ Click viewer + move mouse to look</span>
+        <span class="hint">⌨️ WASD to move | Arrows to turn</span>
+        <span class="hint">ESC to unlock mouse</span>
       </div>
     </div>
     <div class="status-bar" style="padding: 5px 20px;">
@@ -312,9 +311,11 @@
 
   <script>
     const API_URL = 'http://localhost:4000/api';
-    let selectedBot = 'vulkan';
+    let selectedBot = 'nafi';
     let selectedPort = 3002;
     const pressedKeys = new Set();
+    let isMouseLocked = false;
+    let lastMouseMove = 0;
 
     // Bot selection
     document.querySelectorAll('.bot-btn').forEach(btn => {
@@ -400,13 +401,56 @@
       document.getElementById('chatInput').focus();
     });
 
+    // Mouse look with pointer lock
+    const viewerContainer = document.querySelector('.viewer-container');
+
+    viewerContainer.addEventListener('click', () => {
+      viewerContainer.requestPointerLock();
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+      isMouseLocked = document.pointerLockElement === viewerContainer;
+      if (isMouseLocked) {
+        console.log('Mouse locked - move mouse to look around!');
+      }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isMouseLocked) return;
+
+      // Throttle mouse look to every 16ms (~60fps)
+      const now = Date.now();
+      if (now - lastMouseMove < 16) return;
+      lastMouseMove = now;
+
+      if (e.movementX !== 0 || e.movementY !== 0) {
+        mouseLook(e.movementX, e.movementY);
+      }
+    });
+
+    async function mouseLook(deltaX, deltaY) {
+      try {
+        await fetch(`${API_URL}/${selectedBot}/mouselook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deltaX: -deltaX,  // Inverted X-axis for natural mouse look
+            deltaY: -deltaY,  // Inverted Y-axis for natural mouse look
+            sensitivity: 0.005
+          })
+        });
+      } catch (error) {
+        console.error('Error with mouse look:', error);
+      }
+    }
+
     // API calls
     async function moveBot(direction) {
       try {
         await fetch(`${API_URL}/${selectedBot}/move`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ direction, distance: 5 })
+          body: JSON.stringify({ direction, duration: 200 })
         });
       } catch (error) {
         console.error('Error moving bot:', error);
