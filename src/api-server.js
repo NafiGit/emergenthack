@@ -51,7 +51,7 @@ function createBot(name) {
       try {
         const portMap = { 'Vulkan': 3002, 'Terra': 3003, 'Sage': 3004 };
         const port = portMap[name] || 3005;
-        mineflayerViewer(bot, { port: port, firstPerson: false });
+        mineflayerViewer(bot, { port: port, firstPerson: true });
         console.log(`🎨 ${name}'s View: http://localhost:${port}`);
       } catch (err) {
         console.log(`⚠️  Viewer failed for ${name}:`, err.message);
