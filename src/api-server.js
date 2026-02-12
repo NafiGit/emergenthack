@@ -4,6 +4,7 @@ import mineflayer from 'mineflayer';
 import pathfinderPlugin from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pathfinderPlugin;
 import minecraftData from 'minecraft-data';
+import { eventBus } from './eventBus.js';
 
 // Try to load viewer
 let mineflayerViewer = null;
@@ -103,6 +104,17 @@ app.post('/api/:bot/goto', async (req, res) => {
     bot.pathfinder.setMovements(movements);
     bot.pathfinder.setGoal(new goals.GoalNear(x, y, z, 1));
 
+    // Publish event to event bus
+    const pos = bot.entity.position;
+    eventBus.publish('GOTO', {
+      agent: req.params.bot,
+      source: 'manual',
+      data: {
+        from: { x: pos.x, y: pos.y, z: pos.z },
+        to: { x, y, z }
+      }
+    });
+
     res.json({ success: true, message: `${req.params.bot} moving to (${x}, ${y}, ${z})` });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -152,6 +164,18 @@ app.post('/api/:bot/move', async (req, res) => {
     bot.pathfinder.setMovements(movements);
     bot.pathfinder.setGoal(new goals.GoalNear(target.x, target.y, target.z, 1));
 
+    // Publish event to event bus
+    eventBus.publish('MOVE', {
+      agent: req.params.bot,
+      source: 'manual',
+      data: {
+        direction,
+        from: { x: pos.x, y: pos.y, z: pos.z },
+        to: { x: target.x, y: target.y, z: target.z },
+        distance
+      }
+    });
+
     res.json({ success: true, message: `${req.params.bot} moving ${direction}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -167,6 +191,14 @@ app.post('/api/:bot/chat', (req, res) => {
   if (!message) return res.status(400).json({ error: 'Missing message' });
 
   bot.chat(message);
+
+  // Publish event to event bus
+  eventBus.publish('CHAT', {
+    agent: req.params.bot,
+    source: 'manual',
+    data: { message }
+  });
+
   res.json({ success: true, message: `${req.params.bot} said: "${message}"` });
 });
 
@@ -177,6 +209,13 @@ app.post('/api/:bot/jump', (req, res) => {
 
   bot.setControlState('jump', true);
   setTimeout(() => bot.setControlState('jump', false), 500);
+
+  // Publish event to event bus
+  eventBus.publish('JUMP', {
+    agent: req.params.bot,
+    source: 'manual',
+    data: { position: bot.entity.position }
+  });
 
   res.json({ success: true, message: `${req.params.bot} jumped` });
 });
@@ -205,6 +244,14 @@ app.post('/api/:bot/stop', (req, res) => {
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
   bot.pathfinder.setGoal(null);
+
+  // Publish event to event bus
+  eventBus.publish('STOP', {
+    agent: req.params.bot,
+    source: 'manual',
+    data: { position: bot.entity.position }
+  });
+
   res.json({ success: true, message: `${req.params.bot} stopped` });
 });
 
