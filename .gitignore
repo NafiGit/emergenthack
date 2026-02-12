@@ -1,0 +1,25 @@
+# Environment variables (contains API keys)
+.env
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Minecraft server files
+server/world/
+server/logs/
+*.jar
+
+# Database
+*.db
+data/
