@@ -31,13 +31,10 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // Using free models from OpenRouter
 const FREE_MODELS = {
-  gemini: 'google/gemini-flash-1.5-8b',      // Fast, good quality, FREE
-  llama: 'meta-llama/llama-3.1-8b-instruct:free', // FREE
-  qwen: 'qwen/qwen-2.5-7b-instruct:free',   // FREE
-  phi: 'microsoft/phi-3-medium-128k-instruct:free', // FREE
+  llama: 'meta-llama/llama-3.3-70b-instruct:free', // FREE - VERIFIED WORKING
 };
 
-const MODEL = FREE_MODELS.llama; // Using Llama 3.1 (most stable free model)
+const MODEL = FREE_MODELS.llama; // Using Llama 3.3 70B (verified free model)
 
 console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
 
