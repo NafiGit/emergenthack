@@ -52,3 +52,10 @@ web-client/.cursor/
 
 # Agent Logs
 agents/*/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
