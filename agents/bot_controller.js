@@ -6,6 +6,7 @@ import express from 'express';
 import { Rcon } from 'rcon-client';
 import { Vec3 } from 'vec3';
 import eventBus from './event_bus.js';
+import fs from 'fs';
 
 const app = express();
 app.use(express.json());
@@ -18,6 +19,77 @@ const patrolPoints = new Map(); // Track patrol points for each bot
 const reconnectAttempts = new Map(); // Track reconnection attempts
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY = 5000; // 5 seconds
+const agentBoundaries = new Map(); // Track build boundaries for each agent
+const agentSpawns = new Map(); // Track spawn points for each agent
+
+// Load agent boundaries from file
+function loadBoundaries() {
+  try {
+    const data = fs.readFileSync('/tmp/agent_boundaries.json', 'utf8');
+    const boundaries = JSON.parse(data);
+    boundaries.forEach(b => {
+      agentBoundaries.set(b.agent, {
+        x1: b.x1,
+        z1: b.z1,
+        x2: b.x2,
+        z2: b.z2,
+        y: b.y
+      });
+      agentSpawns.set(b.agent, { x: b.x, y: b.y + 1, z: b.z });
+    });
+    console.log('📏 Loaded boundaries for agents:', Array.from(agentBoundaries.keys()).join(', '));
+  } catch (e) {
+    console.log('⚠️  No boundaries file found');
+  }
+}
+
+// Check if position is within agent's boundaries
+function isWithinBoundaries(botName, x, y, z) {
+  const bounds = agentBoundaries.get(botName);
+  if (!bounds) return true; // No restrictions if no boundaries set
+
+  const maxHeight = bounds.y + 30; // 30 blocks above platform
+  return x >= bounds.x1 && x <= bounds.x2 &&
+         z >= bounds.z1 && z <= bounds.z2 &&
+         y >= bounds.y && y <= maxHeight;
+}
+
+// Check if position is agent's spawn (prevent suffocation)
+function isSpawnProtected(botName, x, y, z) {
+  const spawn = agentSpawns.get(botName);
+  if (!spawn) return false;
+
+  // Protect 2x2x2 area around spawn
+  return Math.abs(x - spawn.x) <= 1 &&
+         Math.abs(y - spawn.y) <= 1 &&
+         Math.abs(z - spawn.z) <= 1;
+}
+
+// Check if entire build area is within boundaries
+function checkBuildArea(botName, x1, y1, z1, x2, y2, z2) {
+  // Check all corners of the build area
+  const corners = [
+    [x1, y1, z1],
+    [x2, y1, z1],
+    [x1, y2, z1],
+    [x2, y2, z1],
+    [x1, y1, z2],
+    [x2, y1, z2],
+    [x1, y2, z2],
+    [x2, y2, z2]
+  ];
+
+  for (const [x, y, z] of corners) {
+    if (!isWithinBoundaries(botName, x, y, z)) {
+      return { valid: false, error: 'Build area extends outside boundaries' };
+    }
+    if (isSpawnProtected(botName, x, y, z)) {
+      return { valid: false, error: 'Build area overlaps spawn protection' };
+    }
+  }
+
+  return { valid: true };
+}
 
 // Create and manage bots
 function createBot(username) {
@@ -398,6 +470,12 @@ app.post('/bot/build_wall', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
+  // Check build area boundaries
+  const areaCheck = checkBuildArea(bot_name, x1, y1, z1, x2, y2, z2);
+  if (!areaCheck.valid) {
+    return res.status(403).json({ error: areaCheck.error });
+  }
+
   try {
     // Move bot near the build location
     const centerX = (x1 + x2) / 2;
@@ -430,6 +508,18 @@ app.post('/bot/build_floor', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
+  // Calculate floor bounds first
+  const x1 = Math.floor(x - width / 2);
+  const x2 = Math.floor(x + width / 2);
+  const z1 = Math.floor(z - length / 2);
+  const z2 = Math.floor(z + length / 2);
+
+  // Check boundaries
+  const areaCheck = checkBuildArea(bot_name, x1, y, z1, x2, y, z2);
+  if (!areaCheck.valid) {
+    return res.status(403).json({ error: areaCheck.error });
+  }
+
   try {
     // Move bot to the location
     const goal = new goals.GoalNear(x, y, z, 3);
@@ -437,12 +527,6 @@ app.post('/bot/build_floor', async (req, res) => {
 
     bot.chat(`Building a floor platform!`);
     await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Calculate floor bounds
-    const x1 = Math.floor(x - width / 2);
-    const x2 = Math.floor(x + width / 2);
-    const z1 = Math.floor(z - length / 2);
-    const z2 = Math.floor(z + length / 2);
 
     const command = `fill ${x1} ${y} ${z1} ${x2} ${y} ${z2} ${block}`;
     const response = await executeRCON(command);
@@ -462,6 +546,21 @@ app.post('/bot/build_cube', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
+  // Calculate bounds first
+  const half = Math.floor(size / 2);
+  const x1 = x - half;
+  const x2 = x + half;
+  const y1 = y;
+  const y2 = y + size - 1;
+  const z1 = z - half;
+  const z2 = z + half;
+
+  // Check boundaries
+  const areaCheck = checkBuildArea(bot_name, x1, y1, z1, x2, y2, z2);
+  if (!areaCheck.valid) {
+    return res.status(403).json({ error: areaCheck.error });
+  }
+
   try {
     const goal = new goals.GoalNear(x, y, z, 3);
     bot.pathfinder.setGoal(goal);
@@ -469,14 +568,6 @@ app.post('/bot/build_cube', async (req, res) => {
     const buildType = hollow ? 'hollow cube' : 'cube';
     bot.chat(`Building a ${buildType}!`);
     await new Promise(resolve => setTimeout(resolve, 2000));
-
-    const half = Math.floor(size / 2);
-    const x1 = x - half;
-    const x2 = x + half;
-    const y1 = y;
-    const y2 = y + size - 1;
-    const z1 = z - half;
-    const z2 = z + half;
 
     const hollowFlag = hollow ? ' hollow' : '';
     const command = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}${hollowFlag}`;
@@ -495,6 +586,12 @@ app.post('/bot/build_pillar', async (req, res) => {
 
   if (!bot) {
     return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  // Check boundaries
+  const areaCheck = checkBuildArea(bot_name, x, y_start, z, x, y_start + height - 1, z);
+  if (!areaCheck.valid) {
+    return res.status(403).json({ error: areaCheck.error });
   }
 
   try {
@@ -523,6 +620,13 @@ app.post('/bot/build_pyramid', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
+  // Check boundaries for entire pyramid base
+  const half = Math.floor(size / 2);
+  const areaCheck = checkBuildArea(bot_name, x - half, y, z - half, x + half, y + size - 1, z + half);
+  if (!areaCheck.valid) {
+    return res.status(403).json({ error: areaCheck.error });
+  }
+
   try {
     const goal = new goals.GoalNear(x, y, z, 3);
     bot.pathfinder.setGoal(goal);
@@ -532,11 +636,11 @@ app.post('/bot/build_pyramid', async (req, res) => {
 
     const responses = [];
     for (let level = 0; level < size; level++) {
-      const half = Math.floor((size - level) / 2);
-      const x1 = x - half;
-      const x2 = x + half;
-      const z1 = z - half;
-      const z2 = z + half;
+      const level_half = Math.floor((size - level) / 2);
+      const x1 = x - level_half;
+      const x2 = x + level_half;
+      const z1 = z - level_half;
+      const z2 = z + level_half;
       const y_level = y + level;
 
       const command = `fill ${x1} ${y_level} ${z1} ${x2} ${y_level} ${z2} ${block}`;
@@ -588,6 +692,22 @@ app.post('/bot/place_block_manual', async (req, res) => {
 
   if (!bot) {
     return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  // Check boundaries
+  if (!isWithinBoundaries(bot_name, x, y, z)) {
+    return res.status(403).json({
+      error: 'Outside build area',
+      message: `${bot_name} can only build within their designated platform`
+    });
+  }
+
+  // Check spawn protection
+  if (isSpawnProtected(bot_name, x, y, z)) {
+    return res.status(403).json({
+      error: 'Spawn protected',
+      message: `Cannot build at spawn point to prevent suffocation`
+    });
   }
 
   try {
@@ -863,6 +983,9 @@ app.listen(PORT, () => {
   console.log(`🤖 Bot Controller API running on port ${PORT}`);
   console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/place_block_manual, /bot/build_manual, /bot/rejoin, /bot/set_spawn`);
   console.log(`📊 Event Bus: /events/recent, /events/stats, /events/agent/:name, /events/type/:type`);
+
+  // Load agent boundaries
+  loadBoundaries();
 });
 
 // Graceful shutdown
