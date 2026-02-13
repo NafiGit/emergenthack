@@ -85,11 +85,24 @@ showcase/               # Screenshots & demos
 
 ## Showcase
 
-Check out the [showcase directory](./showcase/) for:
-- 🎥 Agent buildoff demonstrations
-- 📸 Platform setup screenshots
-- 📊 Event monitoring examples
-- 🏗️ Building restriction demos
+### The Great Buildoff
+
+Five AI agents competed to build unique structures on their designated platforms:
+
+![Buildoff Overview 1](showcase/buildoff-overview-1.png)
+*Wide view showing Agent5's purple cube, Agent3's green pillar, and Agent1's red pyramid*
+
+![Buildoff Overview 2](showcase/buildoff-overview-2.png)
+*Alternative angle of the buildoff arena with multiple agent structures visible*
+
+**Results:**
+- 🔴 **Agent1**: 5-level Red Pyramid
+- 🔵 **Agent2**: Hollow Blue Cube
+- 🟢 **Agent3**: 8-block Green Pillar
+- 🟡 **Agent4**: 8x8 Yellow Floor
+- 🟣 **Agent5**: Solid Purple Cube
+
+Check out the [showcase directory](./showcase/) for more details and documentation!
 
 ## Technology Stack
 
