@@ -5,6 +5,7 @@ const { pathfinder, Movements, goals } = pathfinderPlugin;
 import express from 'express';
 import { Rcon } from 'rcon-client';
 import { Vec3 } from 'vec3';
+import eventBus from './event_bus.js';
 
 const app = express();
 app.use(express.json());
@@ -29,6 +30,9 @@ function createBot(username) {
   bot.on('spawn', async () => {
     console.log(`✅ ${username} joined`);
     bot.movements = new Movements(bot);
+
+    // Emit join event
+    eventBus.emitAgentJoined(username, bot.entity.position);
 
     // Give the bot building materials
     const blocks = [
@@ -55,6 +59,11 @@ function createBot(username) {
 
   bot.on('error', (err) => {
     console.log(`❌ ${username} error:`, err.message);
+    eventBus.emitAgentError(username, err);
+  });
+
+  bot.on('end', (reason) => {
+    eventBus.emitAgentLeft(username, reason);
   });
 
   return bot;
@@ -153,6 +162,7 @@ app.post('/bot/say', (req, res) => {
   }
 
   bot.chat(message);
+  eventBus.emitAgentSpoke(bot_name, message);
   res.json({ success: true, message: `${bot_name} said: ${message}` });
 });
 
@@ -734,10 +744,36 @@ app.post('/bot/build_manual', async (req, res) => {
   }
 });
 
+// Event Bus API endpoints
+app.get('/events/recent', (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  res.json(eventBus.getRecentEvents(limit));
+});
+
+app.get('/events/stats', (req, res) => {
+  res.json(eventBus.getStats());
+});
+
+app.get('/events/agent/:name', (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  res.json(eventBus.getEventsByAgent(req.params.name, limit));
+});
+
+app.get('/events/type/:type', (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  res.json(eventBus.getEventsByType(req.params.type, limit));
+});
+
+app.post('/events/clear', (req, res) => {
+  eventBus.clearLog();
+  res.json({ success: true, message: 'Event log cleared' });
+});
+
 const PORT = 8765;
 app.listen(PORT, () => {
   console.log(`🤖 Bot Controller API running on port ${PORT}`);
   console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/place_block_manual, /bot/build_manual`);
+  console.log(`📊 Event Bus: /events/recent, /events/stats, /events/agent/:name, /events/type/:type`);
 });
 
 // Graceful shutdown
