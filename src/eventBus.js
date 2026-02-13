@@ -3,9 +3,12 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 
+const MAX_EVENT_CACHE = 50;
+
 class BotEventBus extends EventEmitter {
   constructor() {
     super();
+    this.eventCache = [];
     this.setupLogSubscriber();
   }
 
@@ -16,8 +19,18 @@ class BotEventBus extends EventEmitter {
       type: eventType,
       ...data
     };
+    // Cache recent events for perception
+    this.eventCache.push(event);
+    if (this.eventCache.length > MAX_EVENT_CACHE) {
+      this.eventCache.shift();
+    }
     this.emit('bot-action', event);
     return event;
+  }
+
+  // Get recent events for agent perception
+  getRecentEvents(limit = 10) {
+    return this.eventCache.slice(-limit);
   }
 
   // Subscribe to events
