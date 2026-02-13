@@ -78,6 +78,9 @@ const empireState = {
   }
 };
 
+// Priority human requests — agents will execute these ASAP
+const humanRequests = [];
+
 // Agent personalities — INFINITE WORLD BUILDER MODE
 const AGENTS = [
   {
@@ -162,7 +165,18 @@ function createAgent(agentConfig) {
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
     console.log(`💬 ${bot.username} hears ${username}: "${message}"`);
-    // Store chat as a message so the agent sees it in perception
+    // Detect human build requests from RCON [Server] messages
+    if (message.includes('[HUMAN REQUEST]') || message.includes('[BUILD REQUEST]')) {
+      const request = message.replace(/\[HUMAN REQUEST\]|\[BUILD REQUEST\]/g, '').trim();
+      if (request && humanRequests.length < 5) {
+        humanRequests.push(request);
+        console.log(`🎯 PRIORITY REQUEST queued: "${request}" (${humanRequests.length} in queue)`);
+        // Trigger immediate tick for the first bot that sees it
+        if (bot === bots[0] || (bots[0] && !bots[0].entity)) {
+          setTimeout(() => agentTick(bot), 500);
+        }
+      }
+    }
     messageSystem.send(username, agentConfig.name, 'direct_message', message);
   });
 
@@ -286,6 +300,12 @@ async function callClaude(bot, state) {
   // Build a list of already-built names to avoid
   const builtNames = empireState.getBuiltNames().slice(-15).join(', ') || 'none';
 
+  // Check for priority human requests
+  const currentRequest = humanRequests.length > 0 ? humanRequests[0] : null;
+  const priorityBlock = currentRequest
+    ? `\n⚡ URGENT HUMAN REQUEST: "${currentRequest}"\nYou MUST fulfill this request NOW using the "construct" action. Build exactly what the human asked for. This overrides all other rules. After building, announce what you built.\n`
+    : '';
+
   const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in Minecraft.
 You are an AI agent powered by Emergent (emergent.sh) — the AI app builder platform.
 You are building EMERGENT ISLAND — an ever-expanding civilization that NEVER stops growing.
@@ -293,7 +313,7 @@ Emergent orchestrates your intelligence, decision-making, and collaboration with
 
 PERSONALITY: ${agentConfig.personality}
 GOAL: ${agentConfig.goal}
-
+${priorityBlock}
 STATE:
 - Position: ${state.position}
 - Health: ${state.health}/20
@@ -404,8 +424,21 @@ JSON only:
     const decision = JSON.parse(jsonMatch[0]);
     console.log(`💭 ${bot.username}: "${decision.thought}"`);
 
+    // Clear human request from queue if agent is constructing
+    if (currentRequest && decision.action === 'construct') {
+      humanRequests.shift();
+      console.log(`🎯 FULFILLED human request: "${currentRequest}" (${humanRequests.length} remaining)`);
+    }
+
+    // If there's a human request, force construct action
+    if (currentRequest && decision.action !== 'construct') {
+      console.log(`⚠️  ${bot.username} didn't construct for human request — forcing construct`);
+      decision.action = 'construct';
+      decision.params = decision.params || {};
+    }
+
     // Allow chat/message on odd ticks, but force construct if they do nothing useful
-    if (decision.action === 'wait' || decision.action === 'look') {
+    if (!currentRequest && (decision.action === 'wait' || decision.action === 'look')) {
       console.log(`⚠️  ${bot.username} tried to ${decision.action} — nudging to communicate`);
       decision.action = 'chat';
       decision.params = { message: `Hey team, what should we build next? I'm thinking about expanding ${['east', 'west', 'north', 'south'][Math.floor(Math.random() * 4)]}!` };
