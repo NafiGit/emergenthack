@@ -15,6 +15,9 @@ const BOT_NAMES = ['Agent1', 'Agent2', 'Agent3', 'Agent4', 'Agent5'];
 const followTargets = new Map(); // Track who each bot is following
 const botModes = new Map(); // Track each bot's current mode
 const patrolPoints = new Map(); // Track patrol points for each bot
+const reconnectAttempts = new Map(); // Track reconnection attempts
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_DELAY = 5000; // 5 seconds
 
 // Create and manage bots
 function createBot(username) {
@@ -30,6 +33,9 @@ function createBot(username) {
   bot.on('spawn', async () => {
     console.log(`✅ ${username} joined`);
     bot.movements = new Movements(bot);
+
+    // Reset reconnect attempts on successful join
+    reconnectAttempts.delete(username);
 
     // Emit join event
     eventBus.emitAgentJoined(username, bot.entity.position);
@@ -63,7 +69,29 @@ function createBot(username) {
   });
 
   bot.on('end', (reason) => {
+    console.log(`🔌 ${username} disconnected: ${reason}`);
     eventBus.emitAgentLeft(username, reason);
+
+    // Auto-reconnect logic
+    const attempts = reconnectAttempts.get(username) || 0;
+
+    if (attempts < MAX_RECONNECT_ATTEMPTS) {
+      reconnectAttempts.set(username, attempts + 1);
+      console.log(`🔄 Attempting to reconnect ${username} (attempt ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`);
+
+      setTimeout(() => {
+        try {
+          const newBot = createBot(username);
+          bots.set(username, newBot);
+          eventBus.emitAgentRejoinRequested(username, reason);
+        } catch (e) {
+          console.log(`❌ Failed to reconnect ${username}: ${e.message}`);
+        }
+      }, RECONNECT_DELAY);
+    } else {
+      console.log(`⚠️  ${username} exceeded max reconnect attempts`);
+      reconnectAttempts.delete(username);
+    }
   });
 
   return bot;
@@ -767,6 +795,34 @@ app.get('/events/type/:type', (req, res) => {
 app.post('/events/clear', (req, res) => {
   eventBus.clearLog();
   res.json({ success: true, message: 'Event log cleared' });
+});
+
+// Manual rejoin trigger
+app.post('/bot/rejoin', (req, res) => {
+  const { bot_name } = req.body;
+
+  if (!BOT_NAMES.includes(bot_name)) {
+    return res.status(400).json({ error: 'Invalid bot name' });
+  }
+
+  try {
+    // Disconnect existing bot if present
+    const existingBot = bots.get(bot_name);
+    if (existingBot) {
+      existingBot.quit();
+    }
+
+    // Create new bot
+    setTimeout(() => {
+      const newBot = createBot(bot_name);
+      bots.set(bot_name, newBot);
+      eventBus.emitAgentRejoinRequested(bot_name, 'manual rejoin');
+    }, 1000);
+
+    res.json({ success: true, message: `${bot_name} reconnecting...` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 const PORT = 8765;

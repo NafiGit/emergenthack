@@ -208,6 +208,20 @@ class AgentEventBus extends EventEmitter {
 // Create singleton instance
 const eventBus = new AgentEventBus();
 
+// Rejoin event
+class RejoinEvent {
+  emitAgentRejoinRequested(agentName, reason) {
+    eventBus.emit('agent:rejoin_requested', {
+      agent: agentName,
+      reason: reason,
+      timestamp: Date.now()
+    });
+  }
+}
+
+// Add rejoin method to event bus
+Object.assign(eventBus, new RejoinEvent());
+
 // Example subscribers
 eventBus.on('agent:joined', (data) => {
   console.log(`✅ ${data.agent} joined at (${Math.round(data.position?.x)}, ${Math.round(data.position?.y)}, ${Math.round(data.position?.z)})`);
@@ -215,6 +229,10 @@ eventBus.on('agent:joined', (data) => {
 
 eventBus.on('agent:left', (data) => {
   console.log(`❌ ${data.agent} left: ${data.reason}`);
+});
+
+eventBus.on('agent:rejoin_requested', (data) => {
+  console.log(`🔄 Rejoin requested for ${data.agent}: ${data.reason}`);
 });
 
 eventBus.on('agent:error', (data) => {

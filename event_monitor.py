@@ -96,14 +96,17 @@ def show_stats():
     except Exception as e:
         print(f"Error: {e}")
 
-def watch_events(follow=True):
-    """Watch events in real-time"""
+def watch_events(auto_rejoin=False):
+    """Watch events in real-time with optional auto-rejoin"""
     print("="*60)
     print("   👁️  AGENT EVENT MONITOR")
+    if auto_rejoin:
+        print("   🔄 AUTO-REJOIN ENABLED")
     print("="*60)
     print("Watching for agent events... (Ctrl+C to stop)\n")
 
     last_count = 0
+    disconnected_agents = set()
 
     try:
         while True:
@@ -115,6 +118,30 @@ def watch_events(follow=True):
                 new_events = events[last_count:]
                 for event in new_events:
                     print(format_event(event))
+
+                    # Auto-rejoin on disconnect
+                    if auto_rejoin and event.get('event') == 'agent:left':
+                        agent = event.get('data', {}).get('agent')
+                        if agent and agent not in disconnected_agents:
+                            disconnected_agents.add(agent)
+                            print(f"   🔄 Triggering rejoin for {agent}...")
+
+                            try:
+                                rejoin_response = requests.post(
+                                    f"{BOT_API}/bot/rejoin",
+                                    json={"bot_name": agent},
+                                    timeout=5
+                                )
+                                print(f"   ✅ Rejoin triggered: {rejoin_response.json().get('message', 'OK')}")
+                            except Exception as e:
+                                print(f"   ❌ Rejoin failed: {e}")
+
+                    # Clear disconnected set on successful join
+                    if event.get('event') == 'agent:joined':
+                        agent = event.get('data', {}).get('agent')
+                        if agent in disconnected_agents:
+                            disconnected_agents.remove(agent)
+
                 last_count = len(events)
 
             time.sleep(1)  # Poll every second
@@ -146,7 +173,7 @@ def show_help():
 =====================
 
 USAGE:
-  python event_monitor.py [command]
+  python event_monitor.py [command] [options]
 
 COMMANDS:
   watch       - Watch events in real-time (default)
@@ -154,11 +181,23 @@ COMMANDS:
   agent NAME  - Show events for specific agent
   clear       - Clear event log
 
+OPTIONS:
+  --auto-rejoin   - Automatically trigger rejoin when agents disconnect
+
 EXAMPLES:
   python event_monitor.py
+  python event_monitor.py watch --auto-rejoin
   python event_monitor.py stats
   python event_monitor.py agent Agent1
   python event_monitor.py clear
+
+AUTO-REJOIN MODE:
+  When enabled, the monitor will automatically call the /bot/rejoin endpoint
+  whenever an agent:left event is detected. This provides resilient agent
+  connections that automatically recover from disconnects, timeouts, and errors.
+
+  Example:
+    python event_monitor.py watch --auto-rejoin
 
 API ENDPOINTS:
   GET  /events/recent        - Get recent events
@@ -166,20 +205,25 @@ API ENDPOINTS:
   GET  /events/agent/:name   - Get events by agent
   GET  /events/type/:type    - Get events by type
   POST /events/clear         - Clear event log
+  POST /bot/rejoin           - Trigger agent rejoin
 """)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        watch_events()
+    # Check for auto-rejoin flag
+    auto_rejoin = '--auto-rejoin' in sys.argv
+    args = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
+
+    if len(args) < 1:
+        watch_events(auto_rejoin=auto_rejoin)
     else:
-        cmd = sys.argv[1].lower()
+        cmd = args[0].lower()
 
         if cmd == "stats":
             show_stats()
         elif cmd == "watch":
-            watch_events()
-        elif cmd == "agent" and len(sys.argv) >= 3:
-            show_agent_events(sys.argv[2])
+            watch_events(auto_rejoin=auto_rejoin)
+        elif cmd == "agent" and len(args) >= 2:
+            show_agent_events(args[1])
         elif cmd == "clear":
             response = requests.post(f"{BOT_API}/events/clear", timeout=5)
             print("✅ Event log cleared")
