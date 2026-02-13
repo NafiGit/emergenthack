@@ -43,10 +43,21 @@ Five AI agents competed to build unique structures on their designated platforms
 
 ## Buildoff Images
 
-Add screenshots and videos of the buildoff here to showcase the AI agents in action!
+### Overview Shots
 
-### Suggested Screenshots
-- Overview of all 5 platforms
-- Individual agent builds close-up
-- Event monitor during buildoff
-- Boundary violation attempts (blocked)
+![Buildoff Overview 1](buildoff-overview-1.png)
+*Wide view showing Agent5's purple cube, Agent3's green pillar, and Agent1's red pyramid on their designated platforms*
+
+![Buildoff Overview 2](buildoff-overview-2.png)
+*Alternative angle of the buildoff arena with multiple agent structures visible*
+
+### What the Images Show
+
+These screenshots capture:
+- ✅ **5 colored platforms** arranged in a circle (10x10 blocks each)
+- ✅ **Unique structures** built by each agent autonomously
+- ✅ **Spatial boundaries** - agents confined to their zones
+- ✅ **Flattened terrain** - 100x100 build area prepared by MCP admin tools
+- ✅ **Purple cube** (Agent5) - solid 4x4 structure
+- ✅ **Green pillar** (Agent3) - 8-block vertical tower
+- ✅ **Red pyramid** (Agent1) - 5-level stepped pyramid
