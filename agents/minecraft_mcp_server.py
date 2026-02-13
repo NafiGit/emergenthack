@@ -184,6 +184,139 @@ async def handle_list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="build_wall",
+            description="Build a wall between two points",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x1": {"type": "number", "description": "Start X coordinate"},
+                    "y1": {"type": "number", "description": "Start Y coordinate"},
+                    "z1": {"type": "number", "description": "Start Z coordinate"},
+                    "x2": {"type": "number", "description": "End X coordinate"},
+                    "y2": {"type": "number", "description": "End Y coordinate"},
+                    "z2": {"type": "number", "description": "End Z coordinate"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type (e.g., 'stone', 'oak_planks', 'glass')",
+                        "default": "stone"
+                    }
+                },
+                "required": ["x1", "y1", "z1", "x2", "y2", "z2"]
+            }
+        ),
+        Tool(
+            name="build_floor",
+            description="Build a flat floor/platform",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Y level"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "width": {"type": "number", "description": "Width (X direction)"},
+                    "length": {"type": "number", "description": "Length (Z direction)"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type",
+                        "default": "stone"
+                    }
+                },
+                "required": ["x", "y", "z", "width", "length"]
+            }
+        ),
+        Tool(
+            name="build_cube",
+            description="Build a solid cube",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Bottom Y coordinate"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "size": {"type": "number", "description": "Cube size"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type",
+                        "default": "stone"
+                    }
+                },
+                "required": ["x", "y", "z", "size"]
+            }
+        ),
+        Tool(
+            name="build_hollow_cube",
+            description="Build a hollow cube/room with walls",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Bottom Y coordinate"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "size": {"type": "number", "description": "Cube size"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type",
+                        "default": "stone"
+                    }
+                },
+                "required": ["x", "y", "z", "size"]
+            }
+        ),
+        Tool(
+            name="build_pillar",
+            description="Build a vertical pillar",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number", "description": "X coordinate"},
+                    "y_start": {"type": "number", "description": "Starting Y coordinate"},
+                    "z": {"type": "number", "description": "Z coordinate"},
+                    "height": {"type": "number", "description": "Pillar height"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type",
+                        "default": "stone"
+                    }
+                },
+                "required": ["x", "y_start", "z", "height"]
+            }
+        ),
+        Tool(
+            name="build_pyramid",
+            description="Build a pyramid structure",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Base Y coordinate"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "size": {"type": "number", "description": "Base size"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type",
+                        "default": "sandstone"
+                    }
+                },
+                "required": ["x", "y", "z", "size"]
+            }
+        ),
+        Tool(
+            name="clear_area",
+            description="Clear/remove blocks in an area (fill with air)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "x1": {"type": "number", "description": "Start X"},
+                    "y1": {"type": "number", "description": "Start Y"},
+                    "z1": {"type": "number", "description": "Start Z"},
+                    "x2": {"type": "number", "description": "End X"},
+                    "y2": {"type": "number", "description": "End Y"},
+                    "z2": {"type": "number", "description": "End Z"}
+                },
+                "required": ["x1", "y1", "z1", "x2", "y2", "z2"]
+            }
+        ),
+        Tool(
             name="bot_move",
             description="Move a bot to specific coordinates",
             inputSchema={
@@ -335,6 +468,82 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> Sequence[Tex
     elif name == "bot_stop":
         bot_name = arguments["bot_name"]
         response = call_bot_controller("/bot/stop", {"bot_name": bot_name})
+        return [TextContent(type="text", text=response)]
+
+    elif name == "build_wall":
+        x1, y1, z1 = arguments["x1"], arguments["y1"], arguments["z1"]
+        x2, y2, z2 = arguments["x2"], arguments["y2"], arguments["z2"]
+        block = arguments.get("block", "stone")
+        command = f"fill {x1} {y1} {z1} {x2} {y2} {z2} {block}"
+        response = execute_rcon_command(command)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "build_floor":
+        x, y, z = arguments["x"], arguments["y"], arguments["z"]
+        width, length = arguments["width"], arguments["length"]
+        block = arguments.get("block", "stone")
+        x1 = int(x - width // 2)
+        x2 = int(x + width // 2)
+        z1 = int(z - length // 2)
+        z2 = int(z + length // 2)
+        command = f"fill {x1} {y} {z1} {x2} {y} {z2} {block}"
+        response = execute_rcon_command(command)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "build_cube":
+        x, y, z = arguments["x"], arguments["y"], arguments["z"]
+        size = arguments["size"]
+        block = arguments.get("block", "stone")
+        half = size // 2
+        x1, y1, z1 = int(x - half), int(y), int(z - half)
+        x2, y2, z2 = int(x + half), int(y + size - 1), int(z + half)
+        command = f"fill {x1} {y1} {z1} {x2} {y2} {z2} {block}"
+        response = execute_rcon_command(command)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "build_hollow_cube":
+        x, y, z = arguments["x"], arguments["y"], arguments["z"]
+        size = arguments["size"]
+        block = arguments.get("block", "stone")
+        half = size // 2
+        x1, y1, z1 = int(x - half), int(y), int(z - half)
+        x2, y2, z2 = int(x + half), int(y + size - 1), int(z + half)
+        # Build outer walls
+        command = f"fill {x1} {y1} {z1} {x2} {y2} {z2} {block} hollow"
+        response = execute_rcon_command(command)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "build_pillar":
+        x, y_start, z = arguments["x"], arguments["y_start"], arguments["z"]
+        height = arguments["height"]
+        block = arguments.get("block", "stone")
+        y_end = int(y_start + height - 1)
+        command = f"fill {x} {y_start} {z} {x} {y_end} {z} {block}"
+        response = execute_rcon_command(command)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "build_pyramid":
+        x, y, z = arguments["x"], arguments["y"], arguments["z"]
+        size = arguments["size"]
+        block = arguments.get("block", "sandstone")
+        responses = []
+        for level in range(size):
+            half = (size - level) // 2
+            x1 = int(x - half)
+            x2 = int(x + half)
+            z1 = int(z - half)
+            z2 = int(z + half)
+            y_level = int(y + level)
+            command = f"fill {x1} {y_level} {z1} {x2} {y_level} {z2} {block}"
+            response = execute_rcon_command(command)
+            responses.append(f"Level {level}: {response}")
+        return [TextContent(type="text", text="\n".join(responses))]
+
+    elif name == "clear_area":
+        x1, y1, z1 = arguments["x1"], arguments["y1"], arguments["z1"]
+        x2, y2, z2 = arguments["x2"], arguments["y2"], arguments["z2"]
+        command = f"fill {x1} {y1} {z1} {x2} {y2} {z2} air"
+        response = execute_rcon_command(command)
         return [TextContent(type="text", text=response)]
 
     else:
