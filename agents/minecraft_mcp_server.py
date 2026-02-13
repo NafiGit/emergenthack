@@ -382,6 +382,114 @@ async def handle_list_tools() -> list[Tool]:
                 },
                 "required": ["bot_name"]
             }
+        ),
+        Tool(
+            name="bot_build_wall",
+            description="Have a bot build a wall between two points",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {
+                        "type": "string",
+                        "description": "Bot name (Agent1, Agent2, Agent3, Agent4, or Agent5)"
+                    },
+                    "x1": {"type": "number", "description": "Start X coordinate"},
+                    "y1": {"type": "number", "description": "Start Y coordinate"},
+                    "z1": {"type": "number", "description": "Start Z coordinate"},
+                    "x2": {"type": "number", "description": "End X coordinate"},
+                    "y2": {"type": "number", "description": "End Y coordinate"},
+                    "z2": {"type": "number", "description": "End Z coordinate"},
+                    "block": {
+                        "type": "string",
+                        "description": "Block type",
+                        "default": "stone"
+                    }
+                },
+                "required": ["bot_name", "x1", "y1", "z1", "x2", "y2", "z2"]
+            }
+        ),
+        Tool(
+            name="bot_build_floor",
+            description="Have a bot build a floor platform",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {"type": "string", "description": "Bot name"},
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Y level"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "width": {"type": "number", "description": "Width (X direction)"},
+                    "length": {"type": "number", "description": "Length (Z direction)"},
+                    "block": {"type": "string", "description": "Block type", "default": "stone"}
+                },
+                "required": ["bot_name", "x", "y", "z", "width", "length"]
+            }
+        ),
+        Tool(
+            name="bot_build_cube",
+            description="Have a bot build a cube (solid or hollow)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {"type": "string", "description": "Bot name"},
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Bottom Y coordinate"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "size": {"type": "number", "description": "Cube size"},
+                    "block": {"type": "string", "description": "Block type", "default": "stone"},
+                    "hollow": {"type": "boolean", "description": "Make it hollow", "default": False}
+                },
+                "required": ["bot_name", "x", "y", "z", "size"]
+            }
+        ),
+        Tool(
+            name="bot_build_pillar",
+            description="Have a bot build a vertical pillar",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {"type": "string", "description": "Bot name"},
+                    "x": {"type": "number", "description": "X coordinate"},
+                    "y_start": {"type": "number", "description": "Starting Y coordinate"},
+                    "z": {"type": "number", "description": "Z coordinate"},
+                    "height": {"type": "number", "description": "Pillar height"},
+                    "block": {"type": "string", "description": "Block type", "default": "stone"}
+                },
+                "required": ["bot_name", "x", "y_start", "z", "height"]
+            }
+        ),
+        Tool(
+            name="bot_build_pyramid",
+            description="Have a bot build a pyramid structure",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {"type": "string", "description": "Bot name"},
+                    "x": {"type": "number", "description": "Center X coordinate"},
+                    "y": {"type": "number", "description": "Base Y coordinate"},
+                    "z": {"type": "number", "description": "Center Z coordinate"},
+                    "size": {"type": "number", "description": "Base size"},
+                    "block": {"type": "string", "description": "Block type", "default": "sandstone"}
+                },
+                "required": ["bot_name", "x", "y", "z", "size"]
+            }
+        ),
+        Tool(
+            name="bot_clear_area",
+            description="Have a bot clear/remove blocks in an area",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "bot_name": {"type": "string", "description": "Bot name"},
+                    "x1": {"type": "number", "description": "Start X"},
+                    "y1": {"type": "number", "description": "Start Y"},
+                    "z1": {"type": "number", "description": "Start Z"},
+                    "x2": {"type": "number", "description": "End X"},
+                    "y2": {"type": "number", "description": "End Y"},
+                    "z2": {"type": "number", "description": "End Z"}
+                },
+                "required": ["bot_name", "x1", "y1", "z1", "x2", "y2", "z2"]
+            }
         )
     ]
 
@@ -544,6 +652,30 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> Sequence[Tex
         x2, y2, z2 = arguments["x2"], arguments["y2"], arguments["z2"]
         command = f"fill {x1} {y1} {z1} {x2} {y2} {z2} air"
         response = execute_rcon_command(command)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_build_wall":
+        response = call_bot_controller("/bot/build_wall", arguments)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_build_floor":
+        response = call_bot_controller("/bot/build_floor", arguments)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_build_cube":
+        response = call_bot_controller("/bot/build_cube", arguments)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_build_pillar":
+        response = call_bot_controller("/bot/build_pillar", arguments)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_build_pyramid":
+        response = call_bot_controller("/bot/build_pyramid", arguments)
+        return [TextContent(type="text", text=response)]
+
+    elif name == "bot_clear_area":
+        response = call_bot_controller("/bot/clear_area", arguments)
         return [TextContent(type="text", text=response)]
 
     else:
