@@ -825,10 +825,43 @@ app.post('/bot/rejoin', (req, res) => {
   }
 });
 
+// Set agent spawn point
+app.post('/bot/set_spawn', (req, res) => {
+  const { bot_name, x, y, z } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    const position = {
+      x: x || bot.entity.position.x,
+      y: y || bot.entity.position.y,
+      z: z || bot.entity.position.z
+    };
+
+    // Teleport bot to set spawn (Minecraft sets spawn at current position)
+    bot.chat(`/tp ${bot_name} ${position.x} ${position.y} ${position.z}`);
+
+    // Emit spawn set event
+    eventBus.emitAgentSpawnSet(bot_name, position, 'teleport');
+
+    res.json({
+      success: true,
+      bot: bot_name,
+      spawn: position,
+      message: `Spawn set at (${Math.round(position.x)}, ${Math.round(position.y)}, ${Math.round(position.z)})`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = 8765;
 app.listen(PORT, () => {
   console.log(`🤖 Bot Controller API running on port ${PORT}`);
-  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/place_block_manual, /bot/build_manual`);
+  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/place_block_manual, /bot/build_manual, /bot/rejoin, /bot/set_spawn`);
   console.log(`📊 Event Bus: /events/recent, /events/stats, /events/agent/:name, /events/type/:type`);
 });
 

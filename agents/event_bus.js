@@ -119,6 +119,15 @@ class AgentEventBus extends EventEmitter {
     });
   }
 
+  emitAgentSpawnSet(agentName, position, method) {
+    this.emit('agent:spawn_set', {
+      agent: agentName,
+      position: position,
+      method: method, // 'teleport' or 'bed'
+      timestamp: Date.now()
+    });
+  }
+
   // Building events
   emitAgentStartedBuilding(agentName, structure, location) {
     this.emit('agent:started_building', {
@@ -253,6 +262,11 @@ eventBus.on('agent:started_building', (data) => {
 
 eventBus.on('agent:finished_building', (data) => {
   console.log(`✅ ${data.agent} finished ${data.structure} (${data.blocksPlaced} blocks)`);
+});
+
+eventBus.on('agent:spawn_set', (data) => {
+  const pos = data.position;
+  console.log(`🏠 ${data.agent} spawn set at (${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)}) via ${data.method}`);
 });
 
 export default eventBus;

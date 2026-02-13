@@ -47,6 +47,11 @@ def format_event(event):
         new = data.get('newMode', '')
         return f"[{time_str}] 🔄 {agent} mode: {old} → {new}"
 
+    elif event_type == 'spawn_set':
+        pos = data.get('position', {})
+        method = data.get('method', 'unknown')
+        return f"[{time_str}] 🏠 {agent} spawn set at ({int(pos.get('x',0))}, {int(pos.get('y',0))}, {int(pos.get('z',0))}) via {method}"
+
     elif event_type == 'started_building':
         struct = data.get('structure', '')
         return f"[{time_str}] 🏗️  {agent} started building {struct}"
