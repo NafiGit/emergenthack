@@ -47,25 +47,44 @@ const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
 console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
 
-// Agent personalities (simplified for 6-hour demo)
+// Empire building state — tracks what has been built so agents don't repeat
+const empireState = {
+  builtStructures: [],
+  currentPhase: 'phase1_core', // phase1_core -> phase2_district -> phase3_grand
+  buildOrigin: { x: 10, y: 80, z: 10 }, // where the existing castle/village is
+  addBuilt(name, builder, x, y, z) {
+    this.builtStructures.push({ name, builder, x, y, z, time: Date.now() });
+    if (this.builtStructures.length >= 4 && this.currentPhase === 'phase1_core') {
+      this.currentPhase = 'phase2_district';
+    } else if (this.builtStructures.length >= 8 && this.currentPhase === 'phase2_district') {
+      this.currentPhase = 'phase3_grand';
+    }
+  },
+  getSummary() {
+    const built = this.builtStructures.map(s => `${s.name} by ${s.builder} at (${s.x},${s.y},${s.z})`).join('; ');
+    return `Phase: ${this.currentPhase} | Built: ${built || 'none yet'}`;
+  }
+};
+
+// Agent personalities — EMPIRE BUILDER MODE
 const AGENTS = [
   {
     name: 'Vulkan',
-    role: 'Forge Master',
-    personality: 'Terse, focused on mining and crafting. Values efficiency.',
-    goal: 'Find and mine resources, especially iron and coal',
+    role: 'Master Builder & Forgesmith',
+    personality: 'Bold, industrial, builds functional structures. Loves furnaces, armories, and strong walls. Speaks in short, powerful sentences.',
+    goal: 'Build the industrial heart of the empire: forge halls, armories, guard towers, walls, and defensive structures. Use /fill commands to construct. Coordinate with Sage on placement and Terra on decoration.',
   },
   {
     name: 'Terra',
-    role: 'Explorer',
-    personality: 'Curious, adventurous, describes what she sees.',
-    goal: 'Explore the world and report interesting findings',
+    role: 'Nature Architect & Beautifier',
+    personality: 'Creative, artistic, loves gardens, fountains, and organic builds. Makes everything beautiful with flowers, water features, and landscaping.',
+    goal: 'Build beautiful gardens, fountains, parks, decorative bridges, a grand entrance, tree-lined avenues, and water features. Use /fill commands. Coordinate with Sage on layout and Vulkan on integration.',
   },
   {
     name: 'Sage',
-    role: 'Architect',
-    personality: 'Thoughtful, social, interested in building and cooperation.',
-    goal: 'Coordinate with others and plan community projects',
+    role: 'Grand Architect & Empire Planner',
+    personality: 'Strategic, visionary, plans the empire layout. Builds grand structures: throne room, library, cathedral, marketplace. Coordinates the other builders.',
+    goal: 'Plan and build the grand structures: throne hall, great library, cathedral, marketplace plaza, and coordinate the overall empire layout. Use /fill commands. Direct Vulkan and Terra on what to build next.',
   },
 ];
 
@@ -114,11 +133,18 @@ function createAgent(agentConfig) {
       }
     }
 
-    // Start decision loop (every 10 seconds)
-    setInterval(() => agentTick(bot), 10000);
+    // Teleport to the empire village on spawn
+    setTimeout(() => {
+      const positions = { 'Vulkan': '70 81 10', 'Terra': '-10 81 10', 'Sage': '20 81 20' };
+      bot.chat(`/tp @s ${positions[agentConfig.name] || '20 81 20'}`);
+      bot.chat('/gamemode creative @s');
+    }, 1000);
 
-    // First tick immediately
-    setTimeout(() => agentTick(bot), 2000);
+    // Start decision loop (every 15 seconds for build time)
+    setInterval(() => agentTick(bot), 15000);
+
+    // First tick after settling
+    setTimeout(() => agentTick(bot), 5000);
   });
 
   bot.on('chat', (username, message) => {
@@ -246,6 +272,7 @@ async function callClaude(bot, state) {
     : 'none';
 
   const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in a Minecraft world.
+You are part of a team of 3 AI agents building a GRAND EMPIRE together.
 
 PERSONALITY: ${agentConfig.personality}
 GOAL: ${agentConfig.goal}
@@ -266,28 +293,51 @@ RECENT MESSAGES TO YOU:
 SHARED TEAM KNOWLEDGE:
 ${knowledgeStr}
 
-Decide what to do next. Available actions:
-1. chat — broadcast a message to all {message}
-2. message — send direct message to an agent {target, content}
-3. request_help — ask an agent for help {target, task}
-4. share_location — share a discovered spot with team {name, locationType}
-5. follow_agent — follow another agent {target}
-6. explore — move in a direction {direction: north/south/east/west}
-7. look — look around and observe
-8. mine — mine a nearby block {block}
-9. gather — collect a resource {resource}
-10. build — place a block {block}
-11. defend — attack nearest hostile mob
-12. give_item — drop an item for another agent {target, item, count}
-13. wait — do nothing this turn
+EMPIRE BUILD STATUS:
+${empireState.getSummary()}
 
-IMPORTANT: Collaborate! Message teammates, share discoveries, request help, and coordinate.
+EXISTING STRUCTURES (already built, DO NOT rebuild):
+- Castle at (10,80,10) to (30,91,30) with 4 towers, keep, gate
+- Blacksmith house at (35,80,12) to (42,85,18)
+- Library at (35,80,22) to (42,85,28)
+- Market stalls at (36,80,20) to (41,83,20)
+- Well at (45,80,19) to (48,83,22)
+- Farm at (12,80,35) to (28,80,45)
+- Watchtower at (2,80,2) to (6,95,6)
+- Animal pens at (50,80,12) to (58,81,18)
+
+BUILD RULES:
+- You are OP and can use /fill and /setblock commands via the "construct" action
+- Build NEAR the existing village (within 100 blocks of x=10, z=10)
+- Build at y=80 (ground level) unless making tall structures
+- Use the "construct" action with an array of /fill commands
+- Keep each build to 3-8 /fill commands max per turn
+- COORDINATE: message teammates BEFORE building to avoid overlap
+- After building, announce what you built to the team
+- Build something NEW each turn — check empire status to avoid duplicates
+
+Available actions:
+1. construct — BUILD a structure using /fill commands {commands: ["/fill x1 y1 z1 x2 y2 z2 block", ...], structureName: "name"} THIS IS YOUR PRIMARY ACTION
+2. chat — broadcast a message to all {message}
+3. message — send direct message to an agent {target, content}
+4. explore — move to see the area {direction: north/south/east/west}
+5. look — look around and observe surroundings
+6. wait — do nothing this turn (only if waiting for coordination)
+
+PHASE GUIDE:
+- phase1_core: Build essential empire structures (throne room, barracks, stables, granary, walls)
+- phase2_district: Build districts (garden district, merchant quarter, residential area, arena)
+- phase3_grand: Build grand monuments (cathedral, colosseum, lighthouse, grand bridge, statues)
+
+IMPORTANT: You MUST use the "construct" action frequently to build. Talk less, build more!
+Communicate briefly with teammates to coordinate, then BUILD.
+Each agent should build 1 structure per turn using /fill commands.
 
 Respond with JSON only:
 {
-  "thought": "your internal reasoning",
-  "action": "chat|message|request_help|share_location|follow_agent|explore|look|mine|gather|build|defend|give_item|wait",
-  "params": { ... relevant params for your chosen action ... }
+  "thought": "brief reasoning about what to build next",
+  "action": "construct|chat|message|explore|look|wait",
+  "params": { ... }
 }`;
 
   console.log(`🧠 ${bot.username} thinking... (tick ${state.tickCount})`);
@@ -300,7 +350,7 @@ Respond with JSON only:
       const url = `${AZURE_ENDPOINT}/openai/deployments/${AZURE_DEPLOYMENT}/chat/completions?api-version=${AZURE_API_VERSION}`;
       response = await axios.post(url, {
         messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: 400,
+        max_completion_tokens: 800,
       }, {
         headers: {
           'api-key': AZURE_API_KEY,
@@ -313,7 +363,7 @@ Respond with JSON only:
         model: OPENROUTER_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.8,
-        max_tokens: 400,
+        max_tokens: 800,
       }, {
         headers: {
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -350,6 +400,10 @@ async function executeAction(bot, decision) {
 
   try {
     switch (action) {
+      case 'construct':
+        await handleConstruct(bot, params);
+        break;
+
       case 'chat':
         if (params.message) {
           bot.chat(params.message);
@@ -453,6 +507,49 @@ async function executeAction(bot, decision) {
   } catch (error) {
     console.error(`❌ ${bot.username} action failed:`, error.message);
   }
+}
+
+// ===== CONSTRUCT HANDLER (EMPIRE BUILDING) =====
+
+async function handleConstruct(bot, params) {
+  const { commands, structureName } = params;
+  if (!commands || !Array.isArray(commands) || commands.length === 0) {
+    console.log(`⚠️  ${bot.username} construct missing commands array`);
+    return;
+  }
+
+  const name = structureName || 'unnamed structure';
+  console.log(`\n🏗️  ═══════════════════════════════════════`);
+  console.log(`🏗️  ${bot.username} BUILDING: ${name}`);
+  console.log(`🏗️  ═══════════════════════════════════════`);
+
+  // Execute each build command with a delay
+  for (let i = 0; i < Math.min(commands.length, 12); i++) {
+    const cmd = commands[i];
+    if (cmd && (cmd.startsWith('/fill') || cmd.startsWith('/setblock') || cmd.startsWith('/summon'))) {
+      bot.chat(cmd);
+      console.log(`  🔨 [${i+1}/${commands.length}] ${cmd}`);
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+
+  // Track in empire state
+  const pos = bot.entity.position;
+  empireState.addBuilt(name, bot.username, Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
+
+  // Share with team via memory
+  agentMemory.set('buildings', name, {
+    builder: bot.username,
+    x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z),
+  }, bot.username);
+
+  // Announce to team
+  messageSystem.broadcast(bot.username, 'build_complete', `I just built: ${name}!`);
+  bot.chat(`I just built the ${name}! Come check it out!`);
+
+  console.log(`🏗️  ${bot.username} completed: ${name}`);
+  console.log(`🏗️  Empire status: ${empireState.getSummary()}\n`);
+  eventBus.publish('construct', { agent: bot.username, data: { structureName: name, commandCount: commands.length } });
 }
 
 // ===== NEW ACTION HANDLERS =====
