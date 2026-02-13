@@ -156,6 +156,34 @@ class AgentEventBus extends EventEmitter {
     });
   }
 
+  // Mining events
+  emitAgentMinedBlock(agentName, blockType, position) {
+    this.emit('agent:mined_block', {
+      agent: agentName,
+      blockType: blockType,
+      position: position,
+      timestamp: Date.now()
+    });
+  }
+
+  emitAgentStartedMining(agentName, area, resourceType) {
+    this.emit('agent:started_mining', {
+      agent: agentName,
+      area: area,
+      resourceType: resourceType,
+      timestamp: Date.now()
+    });
+  }
+
+  emitAgentFinishedMining(agentName, blocksMined, resources) {
+    this.emit('agent:finished_mining', {
+      agent: agentName,
+      blocksMined: blocksMined,
+      resources: resources,
+      timestamp: Date.now()
+    });
+  }
+
   // Utility methods
   calculateDistance(pos1, pos2) {
     if (!pos1 || !pos2) return 0;
@@ -267,6 +295,19 @@ eventBus.on('agent:finished_building', (data) => {
 eventBus.on('agent:spawn_set', (data) => {
   const pos = data.position;
   console.log(`🏠 ${data.agent} spawn set at (${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)}) via ${data.method}`);
+});
+
+eventBus.on('agent:mined_block', (data) => {
+  const pos = data.position;
+  console.log(`⛏️  ${data.agent} mined ${data.blockType} at (${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)})`);
+});
+
+eventBus.on('agent:started_mining', (data) => {
+  console.log(`⛏️  ${data.agent} started mining ${data.resourceType || 'area'}`);
+});
+
+eventBus.on('agent:finished_mining', (data) => {
+  console.log(`✅ ${data.agent} finished mining (${data.blocksMined} blocks)`);
 });
 
 export default eventBus;

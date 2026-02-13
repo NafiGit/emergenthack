@@ -66,6 +66,19 @@ def format_event(event):
         pos = data.get('position', {})
         return f"[{time_str}] 🧱 {agent} placed {block} at ({pos.get('x')}, {pos.get('y')}, {pos.get('z')})"
 
+    elif event_type == 'mined_block':
+        block = data.get('blockType', '')
+        pos = data.get('position', {})
+        return f"[{time_str}] ⛏️  {agent} mined {block} at ({int(pos.get('x',0))}, {int(pos.get('y',0))}, {int(pos.get('z',0))})"
+
+    elif event_type == 'started_mining':
+        resource = data.get('resourceType', 'area')
+        return f"[{time_str}] ⛏️  {agent} started mining {resource}"
+
+    elif event_type == 'finished_mining':
+        blocks = data.get('blocksMined', 0)
+        return f"[{time_str}] ✅ {agent} finished mining ({blocks} blocks)"
+
     elif event_type == 'error':
         err = data.get('error', '')
         return f"[{time_str}] ⚠️  {agent} error: {err}"

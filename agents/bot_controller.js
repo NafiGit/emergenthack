@@ -978,10 +978,177 @@ app.post('/bot/set_spawn', (req, res) => {
   }
 });
 
+// Mining endpoints
+app.post('/bot/mine_block', async (req, res) => {
+  const { bot_name, x, y, z } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    const targetBlock = bot.blockAt(new Vec3(x, y, z));
+
+    if (!targetBlock || targetBlock.name === 'air') {
+      return res.status(400).json({ error: 'No block at that location' });
+    }
+
+    // Move near the block
+    const goal = new goals.GoalNear(x, y, z, 4);
+    bot.pathfinder.setGoal(goal);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    bot.chat(`Mining ${targetBlock.name}...`);
+
+    // Mine the block
+    await bot.dig(targetBlock);
+
+    eventBus.emit('agent:mined_block', {
+      agent: bot_name,
+      block: targetBlock.name,
+      position: { x, y, z },
+      timestamp: Date.now()
+    });
+
+    bot.chat(`Mined ${targetBlock.name}!`);
+    res.json({
+      success: true,
+      message: `${bot_name} mined ${targetBlock.name}`,
+      block: targetBlock.name
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/mine_area', async (req, res) => {
+  const { bot_name, x1, y1, z1, x2, y2, z2 } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  // Check boundaries
+  const areaCheck = checkBuildArea(bot_name, x1, y1, z1, x2, y2, z2);
+  if (!areaCheck.valid) {
+    return res.status(403).json({ error: areaCheck.error });
+  }
+
+  try {
+    bot.chat(`Mining area...`);
+
+    const minedBlocks = [];
+    const startX = Math.min(x1, x2);
+    const endX = Math.max(x1, x2);
+    const startY = Math.min(y1, y2);
+    const endY = Math.max(y1, y2);
+    const startZ = Math.min(z1, z2);
+    const endZ = Math.max(z1, z2);
+
+    // Move to mining area
+    const centerX = (startX + endX) / 2;
+    const centerY = (startY + endY) / 2;
+    const centerZ = (startZ + endZ) / 2;
+
+    const goal = new goals.GoalNear(centerX, centerY, centerZ, 3);
+    bot.pathfinder.setGoal(goal);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Mine blocks in the area
+    for (let x = startX; x <= endX; x++) {
+      for (let y = startY; y <= endY; y++) {
+        for (let z = startZ; z <= endZ; z++) {
+          const block = bot.blockAt(new Vec3(x, y, z));
+
+          if (block && block.name !== 'air' && block.name !== 'bedrock') {
+            try {
+              await bot.dig(block);
+              minedBlocks.push(block.name);
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (e) {
+              // Skip if can't mine
+            }
+          }
+        }
+      }
+    }
+
+    bot.chat(`Mining complete! Mined ${minedBlocks.length} blocks.`);
+    res.json({
+      success: true,
+      message: `${bot_name} mined ${minedBlocks.length} blocks`,
+      blocksMined: minedBlocks.length,
+      blocks: [...new Set(minedBlocks)]
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/collect_resources', async (req, res) => {
+  const { bot_name, resource_type, count = 10 } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    bot.chat(`Looking for ${resource_type}...`);
+
+    const collected = [];
+    let attempts = 0;
+    const maxAttempts = count * 5;
+
+    while (collected.length < count && attempts < maxAttempts) {
+      attempts++;
+
+      // Find nearby block of the resource type
+      const block = bot.findBlock({
+        matching: (block) => block.name === resource_type,
+        maxDistance: 32
+      });
+
+      if (block) {
+        // Move near the block
+        const goal = new goals.GoalNear(block.position.x, block.position.y, block.position.z, 4);
+        bot.pathfinder.setGoal(goal);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        try {
+          await bot.dig(block);
+          collected.push(resource_type);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (e) {
+          // Skip if can't mine
+        }
+      } else {
+        break; // No more blocks found
+      }
+    }
+
+    if (collected.length > 0) {
+      bot.chat(`Collected ${collected.length} ${resource_type}!`);
+      res.json({
+        success: true,
+        message: `${bot_name} collected ${collected.length} ${resource_type}`,
+        collected: collected.length,
+        resource: resource_type
+      });
+    } else {
+      res.status(404).json({ error: `No ${resource_type} found nearby` });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = 8765;
 app.listen(PORT, () => {
   console.log(`🤖 Bot Controller API running on port ${PORT}`);
-  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/place_block_manual, /bot/build_manual, /bot/rejoin, /bot/set_spawn`);
+  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/mine_*, /bot/collect_resources, /bot/rejoin, /bot/set_spawn`);
   console.log(`📊 Event Bus: /events/recent, /events/stats, /events/agent/:name, /events/type/:type`);
 
   // Load agent boundaries
