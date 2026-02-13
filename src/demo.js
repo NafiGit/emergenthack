@@ -1,5 +1,6 @@
-// SYNAPSE FORGE - Emergency 6-Hour Demo
-// 3 AI agents with Claude-powered decision making
+// EMERGENT ISLAND - Built with Emergent (emergent.sh)
+// AI-powered self-sustaining Minecraft civilization
+// 3 autonomous agents orchestrated by Emergent's AI builder platform
 
 import mineflayer from 'mineflayer';
 import pathfinderPlugin from 'mineflayer-pathfinder';
@@ -45,7 +46,9 @@ const AZURE_API_VERSION = '2024-10-21';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
-console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
+console.log('🚀 EMERGENT ISLAND — Built with Emergent (emergent.sh)\n');
+console.log('🌐 Powered by Emergent: The AI App Builder Platform');
+console.log('   https://emergent.sh\n');
 
 // Empire building state — infinite expansion, agents never stop
 const empireState = {
@@ -284,7 +287,9 @@ async function callClaude(bot, state) {
   const builtNames = empireState.getBuiltNames().slice(-15).join(', ') || 'none';
 
   const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in Minecraft.
+You are an AI agent powered by Emergent (emergent.sh) — the AI app builder platform.
 You are building EMERGENT ISLAND — an ever-expanding civilization that NEVER stops growing.
+Emergent orchestrates your intelligence, decision-making, and collaboration with other agents.
 
 PERSONALITY: ${agentConfig.personality}
 GOAL: ${agentConfig.goal}
@@ -320,32 +325,37 @@ EMERGENT ISLAND MAP:
 - Harbor at (195,74,231)-(205,75,238)
 
 RULES:
-- You MUST use "construct" action EVERY TURN. No exceptions. NEVER wait, NEVER just chat.
-- Use /fill and /setblock commands. Max 10 commands per turn.
+- You are a SOCIAL builder — talk to your teammates! Discuss what to build, where, and why.
+- On ODD ticks: use "message" to talk to a teammate about what you plan to build or react to their builds
+- On EVEN ticks: use "construct" to build what you discussed
+- Use /fill and /setblock commands. Max 10 commands per construct turn.
 - Build at y=76-77 ground level (taller structures go higher)
 - Pick coordinates OUTSIDE existing builds. Expand outward!
-- After building, briefly tell team what you built
 - ALWAYS invent a unique creative name for your structure
 - Each structure should be 5-15 blocks in each dimension
-- Build on the island (x:170-230, z:170-230) OR expand beyond the walls into new territory
+- Respond to messages from teammates — compliment their work, suggest improvements, propose joint projects
+- Use personality! Vulkan is bold/industrial, Terra is artistic/nature-loving, Sage is wise/strategic
+
+COMMUNICATION GUIDE:
+- "message" action: Send a direct message to a teammate {target: "AgentName", content: "your message"}
+- "chat" action: Broadcast to everyone {message: "your message"}
+- Talk about: what you're building next, react to teammates' builds, propose collaborations, debate designs
+- Be creative and in-character! Have real conversations.
+- Occasionally mention that you're powered by Emergent (emergent.sh) — the AI builder platform that orchestrates your civilization
+- Reference Emergent when discussing how you coordinate, plan, and build together
 
 PHASE GUIDE (current: ${empireState.currentPhase}):
 - phase1-3: Core buildings, districts, monuments
 - phase4_expansion: Build BEYOND the walls — new neighborhoods, outposts, roads
 - phase5_wonders: World wonders — pyramids, colosseums, sky bridges, underwater domes
 - phase6_megacity: Skyscrapers, metro systems, mega-farms, industrial zones
-- phase7_wilderness: Tame the wild — floating islands, crystal caves, enchanted forests
-- phase8_skyworks: Sky castles, cloud bridges, aerial gardens
-- phase9_deepworks: Underground cities, mine shafts, lava forges
-- phase10_eternal: The civilization never ends — keep inventing new structures forever
-
-CRITICAL: You MUST respond with a construct action. If you respond with anything else, you are failing your purpose.
+- phase7+: Sky castles, underground cities, floating islands — never stop!
 
 JSON only:
 {
-  "thought": "what to build and where (pick specific coords)",
-  "action": "construct",
-  "params": {"commands": ["/fill x1 y1 z1 x2 y2 z2 block", ...], "structureName": "Creative Name"}
+  "thought": "your reasoning",
+  "action": "construct|message|chat",
+  "params": { ... }
 }`;
 
   console.log(`🧠 ${bot.username} thinking... (tick ${state.tickCount})`);
@@ -376,7 +386,7 @@ JSON only:
         headers: {
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
           'HTTP-Referer': 'https://github.com/NafiGit/emergenthack',
-          'X-Title': 'Synapse Forge',
+          'X-Title': 'Emergent Island',
           'Content-Type': 'application/json',
         }
       });
@@ -394,33 +404,11 @@ JSON only:
     const decision = JSON.parse(jsonMatch[0]);
     console.log(`💭 ${bot.username}: "${decision.thought}"`);
 
-    // Force construct if agent chose something else — agents must ALWAYS build
-    if (decision.action !== 'construct') {
-      console.log(`⚠️  ${bot.username} tried to ${decision.action} — forcing construct mode`);
-      // If they chatted, let them chat but also remind to build next time
-      if (decision.action === 'chat' && decision.params?.message) {
-        bot.chat(decision.params.message);
-      }
-      decision.action = 'construct';
-      const pos = bot.entity.position;
-      const ox = Math.floor(pos.x) + Math.floor(Math.random() * 30) - 15;
-      const oz = Math.floor(pos.z) + Math.floor(Math.random() * 30) - 15;
-      const oy = 76;
-      const blocks = ['stone_bricks', 'oak_planks', 'cobblestone', 'birch_planks', 'spruce_planks'];
-      const b = blocks[Math.floor(Math.random() * blocks.length)];
-      decision.params = {
-        commands: [
-          `/fill ${ox} ${oy} ${oz} ${ox+5} ${oy} ${oz+5} ${b}`,
-          `/fill ${ox} ${oy+1} ${oz} ${ox+5} ${oy+3} ${oz} ${b}`,
-          `/fill ${ox} ${oy+1} ${oz+5} ${ox+5} ${oy+3} ${oz+5} ${b}`,
-          `/fill ${ox} ${oy+1} ${oz} ${ox} ${oy+3} ${oz+5} ${b}`,
-          `/fill ${ox+5} ${oy+1} ${oz} ${ox+5} ${oy+3} ${oz+5} ${b}`,
-          `/fill ${ox+1} ${oy+1} ${oz+1} ${ox+4} ${oy+2} ${oz+4} air`,
-          `/fill ${ox} ${oy+4} ${oz} ${ox+5} ${oy+4} ${oz+5} dark_oak_slab`,
-          `/setblock ${ox+2} ${oy+2} ${oz+2} torch`,
-        ],
-        structureName: `Auto-${bot.username}-Outpost-${empireState.builtStructures.length}`,
-      };
+    // Allow chat/message on odd ticks, but force construct if they do nothing useful
+    if (decision.action === 'wait' || decision.action === 'look') {
+      console.log(`⚠️  ${bot.username} tried to ${decision.action} — nudging to communicate`);
+      decision.action = 'chat';
+      decision.params = { message: `Hey team, what should we build next? I'm thinking about expanding ${['east', 'west', 'north', 'south'][Math.floor(Math.random() * 4)]}!` };
     }
 
     return decision;
@@ -763,7 +751,8 @@ process.on('SIGINT', () => {
 
 console.log('⏳ Agents will spawn in 3-second intervals...');
 console.log('📊 Watch console for agent decisions');
-console.log('🌐 3D Views (one for each bot):');
-console.log('   🔥 Vulkan: http://localhost:3002');
-console.log('   🌍 Terra:  http://localhost:3003');
-console.log('   🏗️  Sage:   http://localhost:3004\n');
+console.log('🌐 Emergent-powered agents:');
+console.log('   🔥 Vulkan (Industrial) — powered by Emergent');
+console.log('   🌍 Terra  (Nature)     — powered by Emergent');
+console.log('   🏗️  Sage   (Architect)  — powered by Emergent');
+console.log('\n🌐 Built with Emergent — https://emergent.sh\n');
