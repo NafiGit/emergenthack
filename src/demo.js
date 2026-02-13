@@ -47,44 +47,53 @@ const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
 console.log('🚀 SYNAPSE FORGE - Emergency Demo\n');
 
-// Empire building state — tracks what has been built so agents don't repeat
+// Empire building state — infinite expansion, agents never stop
 const empireState = {
   builtStructures: [],
-  currentPhase: 'phase1_core', // phase1_core -> phase2_district -> phase3_grand
-  buildOrigin: { x: 10, y: 80, z: 10 }, // where the existing castle/village is
+  currentPhase: 'phase1_core',
+  buildOrigin: { x: 200, y: 76, z: 200 }, // Emergent Island center
+  phaseNames: [
+    'phase1_core', 'phase2_district', 'phase3_grand',
+    'phase4_expansion', 'phase5_wonders', 'phase6_megacity',
+    'phase7_wilderness', 'phase8_skyworks', 'phase9_deepworks',
+    'phase10_eternal'
+  ],
   addBuilt(name, builder, x, y, z) {
     this.builtStructures.push({ name, builder, x, y, z, time: Date.now() });
-    if (this.builtStructures.length >= 4 && this.currentPhase === 'phase1_core') {
-      this.currentPhase = 'phase2_district';
-    } else if (this.builtStructures.length >= 8 && this.currentPhase === 'phase2_district') {
-      this.currentPhase = 'phase3_grand';
-    }
+    const count = this.builtStructures.length;
+    const phaseIndex = Math.min(Math.floor(count / 5), this.phaseNames.length - 1);
+    this.currentPhase = this.phaseNames[phaseIndex];
   },
   getSummary() {
-    const built = this.builtStructures.map(s => `${s.name} by ${s.builder} at (${s.x},${s.y},${s.z})`).join('; ');
-    return `Phase: ${this.currentPhase} | Built: ${built || 'none yet'}`;
+    // Only show last 10 builds to save tokens
+    const recent = this.builtStructures.slice(-10);
+    const built = recent.map(s => `${s.name} by ${s.builder} at (${s.x},${s.y},${s.z})`).join('; ');
+    return `Phase: ${this.currentPhase} | Total built: ${this.builtStructures.length} | Recent: ${built || 'none yet'}`;
+  },
+  getBuiltNames() {
+    return this.builtStructures.map(s => s.name.toLowerCase());
   }
 };
 
-// Agent personalities — EMPIRE BUILDER MODE
+// Agent personalities — INFINITE WORLD BUILDER MODE
 const AGENTS = [
   {
     name: 'Vulkan',
-    role: 'Master Builder & Forgesmith',
-    personality: 'Bold, industrial, builds functional structures. Loves furnaces, armories, and strong walls. Speaks in short, powerful sentences.',
-    goal: 'Build the industrial heart of the empire: forge halls, armories, guard towers, walls, and defensive structures. Use /fill commands to construct. Coordinate with Sage on placement and Terra on decoration.',
+    role: 'Industrial Titan & War Engineer',
+    personality: 'Bold, relentless, never stops building. Every turn must produce a new structure. Loves massive functional builds — factories, walls, bridges, towers, railways, docks, arenas.',
+    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build industrial & military structures: factories, armories, walls, bridges, watchtowers, barracks, railways, docks, warehouses, aqueducts. Always pick NEW coordinates away from existing builds. Expand outward forever.',
   },
   {
     name: 'Terra',
-    role: 'Nature Architect & Beautifier',
-    personality: 'Creative, artistic, loves gardens, fountains, and organic builds. Makes everything beautiful with flowers, water features, and landscaping.',
-    goal: 'Build beautiful gardens, fountains, parks, decorative bridges, a grand entrance, tree-lined avenues, and water features. Use /fill commands. Coordinate with Sage on layout and Vulkan on integration.',
+    role: 'Nature God & World Sculptor',
+    personality: 'Endlessly creative, transforms raw land into beauty. Every turn must produce something new. Loves organic builds — forests, mountains, rivers, gardens, coral reefs, floating islands.',
+    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build nature & beauty: gardens, parks, fountains, tree groves, flower meadows, ponds, waterfalls, hedge mazes, greenhouses, botanical gardens, treehouse villages. Always pick NEW coordinates. Expand outward forever.',
   },
   {
     name: 'Sage',
-    role: 'Grand Architect & Empire Planner',
-    personality: 'Strategic, visionary, plans the empire layout. Builds grand structures: throne room, library, cathedral, marketplace. Coordinates the other builders.',
-    goal: 'Plan and build the grand structures: throne hall, great library, cathedral, marketplace plaza, and coordinate the overall empire layout. Use /fill commands. Direct Vulkan and Terra on what to build next.',
+    role: 'Eternal Architect & Civilization Builder',
+    personality: 'Visionary genius, always planning the next grand structure. Every turn must produce something new. Builds civilization — libraries, temples, palaces, universities, monuments.',
+    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build civilization structures: temples, libraries, universities, palaces, cathedrals, monuments, statues, plazas, amphitheaters, museums, observatories, clock towers. Always pick NEW coordinates. Expand outward forever.',
   },
 ];
 
@@ -133,18 +142,18 @@ function createAgent(agentConfig) {
       }
     }
 
-    // Teleport to the empire village on spawn
+    // Teleport to Emergent Island on spawn
     setTimeout(() => {
-      const positions = { 'Vulkan': '70 81 10', 'Terra': '-10 81 10', 'Sage': '20 81 20' };
-      bot.chat(`/tp @s ${positions[agentConfig.name] || '20 81 20'}`);
+      const positions = { 'Vulkan': '220 77 190', 'Terra': '180 77 200', 'Sage': '200 77 215' };
+      bot.chat(`/tp @s ${positions[agentConfig.name] || '200 77 200'}`);
       bot.chat('/gamemode creative @s');
     }, 1000);
 
-    // Start decision loop (every 15 seconds for build time)
-    setInterval(() => agentTick(bot), 15000);
+    // Start INFINITE build loop (every 12 seconds — fast building)
+    setInterval(() => agentTick(bot), 12000);
 
     // First tick after settling
-    setTimeout(() => agentTick(bot), 5000);
+    setTimeout(() => agentTick(bot), 4000);
   });
 
   bot.on('chat', (username, message) => {
@@ -271,73 +280,72 @@ async function callClaude(bot, state) {
     ? state.nearbyPlayers.map(p => `${p.name} at ${p.position} (${p.distance}m away)`).join(', ')
     : 'none';
 
-  const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in a Minecraft world.
-You are part of a team of 3 AI agents building a GRAND EMPIRE together.
+  // Build a list of already-built names to avoid
+  const builtNames = empireState.getBuiltNames().slice(-15).join(', ') || 'none';
+
+  const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in Minecraft.
+You are building EMERGENT ISLAND — an ever-expanding civilization that NEVER stops growing.
 
 PERSONALITY: ${agentConfig.personality}
 GOAL: ${agentConfig.goal}
 
-CURRENT STATE:
+STATE:
 - Position: ${state.position}
-- Health: ${state.health}/20 | Food: ${state.food}/20
-- Nearby blocks: ${state.nearbyBlocks.join(', ') || 'none visible'}
-- Inventory: ${state.inventory.join(', ') || 'empty'}
-- Nearby players: ${playersStr}
+- Health: ${state.health}/20
+- Nearby blocks: ${state.nearbyBlocks.join(', ') || 'none'}
+- Players: ${playersStr}
 
-OTHER AGENTS STATUS:
+TEAM:
 ${agentStatusStr}
 
-RECENT MESSAGES TO YOU:
-  ${messagesStr}
+MESSAGES: ${messagesStr}
 
-SHARED TEAM KNOWLEDGE:
-${knowledgeStr}
-
-EMPIRE BUILD STATUS:
+EMPIRE STATUS:
 ${empireState.getSummary()}
 
-EXISTING STRUCTURES (already built, DO NOT rebuild):
-- Castle at (10,80,10) to (30,91,30) with 4 towers, keep, gate
-- Blacksmith house at (35,80,12) to (42,85,18)
-- Library at (35,80,22) to (42,85,28)
-- Market stalls at (36,80,20) to (41,83,20)
-- Well at (45,80,19) to (48,83,22)
-- Farm at (12,80,35) to (28,80,45)
-- Watchtower at (2,80,2) to (6,95,6)
-- Animal pens at (50,80,12) to (58,81,18)
+ALREADY BUILT (do NOT repeat these names): ${builtNames}
 
-BUILD RULES:
-- You are OP and can use /fill and /setblock commands via the "construct" action
-- Build NEAR the existing village (within 100 blocks of x=10, z=10)
-- Build at y=80 (ground level) unless making tall structures
-- Use the "construct" action with an array of /fill commands
-- Keep each build to 3-8 /fill commands max per turn
-- COORDINATE: message teammates BEFORE building to avoid overlap
-- After building, announce what you built to the team
-- Build something NEW each turn — check empire status to avoid duplicates
+EMERGENT ISLAND MAP:
+- Island center: (200, 76, 200), grass from (170,75,170) to (230,75,230)
+- Town Hall at (195,76,205)-(215,83,220)
+- Farm at (220,75,175)-(235,76,195) with barn
+- Houses at (175,76,175)-(183,81,199)
+- Blacksmith at (190,76,225)-(200,81,232)
+- Library at (218,76,208)-(226,83,216)
+- Marketplace at (188,76,170)-(211,80,173)
+- Watchtower at (228,76,170)-(232,91,174)
+- Walls around perimeter (172-228, z:170-230)
+- EMERGENT text at (132,77,135)-(272,77,160)
+- Lighthouse at (233,76,198)-(237,91,202)
+- Harbor at (195,74,231)-(205,75,238)
 
-Available actions:
-1. construct — BUILD a structure using /fill commands {commands: ["/fill x1 y1 z1 x2 y2 z2 block", ...], structureName: "name"} THIS IS YOUR PRIMARY ACTION
-2. chat — broadcast a message to all {message}
-3. message — send direct message to an agent {target, content}
-4. explore — move to see the area {direction: north/south/east/west}
-5. look — look around and observe surroundings
-6. wait — do nothing this turn (only if waiting for coordination)
+RULES:
+- You MUST use "construct" action EVERY TURN. No exceptions. NEVER wait, NEVER just chat.
+- Use /fill and /setblock commands. Max 10 commands per turn.
+- Build at y=76-77 ground level (taller structures go higher)
+- Pick coordinates OUTSIDE existing builds. Expand outward!
+- After building, briefly tell team what you built
+- ALWAYS invent a unique creative name for your structure
+- Each structure should be 5-15 blocks in each dimension
+- Build on the island (x:170-230, z:170-230) OR expand beyond the walls into new territory
 
-PHASE GUIDE:
-- phase1_core: Build essential empire structures (throne room, barracks, stables, granary, walls)
-- phase2_district: Build districts (garden district, merchant quarter, residential area, arena)
-- phase3_grand: Build grand monuments (cathedral, colosseum, lighthouse, grand bridge, statues)
+PHASE GUIDE (current: ${empireState.currentPhase}):
+- phase1-3: Core buildings, districts, monuments
+- phase4_expansion: Build BEYOND the walls — new neighborhoods, outposts, roads
+- phase5_wonders: World wonders — pyramids, colosseums, sky bridges, underwater domes
+- phase6_megacity: Skyscrapers, metro systems, mega-farms, industrial zones
+- phase7_wilderness: Tame the wild — floating islands, crystal caves, enchanted forests
+- phase8_skyworks: Sky castles, cloud bridges, aerial gardens
+- phase9_deepworks: Underground cities, mine shafts, lava forges
+- phase10_eternal: The civilization never ends — keep inventing new structures forever
 
-IMPORTANT: You MUST use the "construct" action frequently to build. Talk less, build more!
-Communicate briefly with teammates to coordinate, then BUILD.
-Each agent should build 1 structure per turn using /fill commands.
+CRITICAL: You MUST respond with a construct action. If you respond with anything else, you are failing your purpose.
 
-Respond with JSON only:
+JSON only:
 {
-  "thought": "brief reasoning about what to build next",
-  "action": "construct|chat|message|explore|look|wait",
-  "params": { ... }
+  "thought": "what to build and where (pick specific coords)",
+  "action": "construct",
+  "params": {"commands": ["/fill x1 y1 z1 x2 y2 z2 block", ...], "structureName": "Creative Name"}
 }`;
 
   console.log(`🧠 ${bot.username} thinking... (tick ${state.tickCount})`);
@@ -385,6 +393,35 @@ Respond with JSON only:
 
     const decision = JSON.parse(jsonMatch[0]);
     console.log(`💭 ${bot.username}: "${decision.thought}"`);
+
+    // Force construct if agent chose something else — agents must ALWAYS build
+    if (decision.action !== 'construct') {
+      console.log(`⚠️  ${bot.username} tried to ${decision.action} — forcing construct mode`);
+      // If they chatted, let them chat but also remind to build next time
+      if (decision.action === 'chat' && decision.params?.message) {
+        bot.chat(decision.params.message);
+      }
+      decision.action = 'construct';
+      const pos = bot.entity.position;
+      const ox = Math.floor(pos.x) + Math.floor(Math.random() * 30) - 15;
+      const oz = Math.floor(pos.z) + Math.floor(Math.random() * 30) - 15;
+      const oy = 76;
+      const blocks = ['stone_bricks', 'oak_planks', 'cobblestone', 'birch_planks', 'spruce_planks'];
+      const b = blocks[Math.floor(Math.random() * blocks.length)];
+      decision.params = {
+        commands: [
+          `/fill ${ox} ${oy} ${oz} ${ox+5} ${oy} ${oz+5} ${b}`,
+          `/fill ${ox} ${oy+1} ${oz} ${ox+5} ${oy+3} ${oz} ${b}`,
+          `/fill ${ox} ${oy+1} ${oz+5} ${ox+5} ${oy+3} ${oz+5} ${b}`,
+          `/fill ${ox} ${oy+1} ${oz} ${ox} ${oy+3} ${oz+5} ${b}`,
+          `/fill ${ox+5} ${oy+1} ${oz} ${ox+5} ${oy+3} ${oz+5} ${b}`,
+          `/fill ${ox+1} ${oy+1} ${oz+1} ${ox+4} ${oy+2} ${oz+4} air`,
+          `/fill ${ox} ${oy+4} ${oz} ${ox+5} ${oy+4} ${oz+5} dark_oak_slab`,
+          `/setblock ${ox+2} ${oy+2} ${oz+2} torch`,
+        ],
+        structureName: `Auto-${bot.username}-Outpost-${empireState.builtStructures.length}`,
+      };
+    }
 
     return decision;
 
@@ -524,7 +561,7 @@ async function handleConstruct(bot, params) {
   console.log(`🏗️  ═══════════════════════════════════════`);
 
   // Execute each build command with a delay
-  for (let i = 0; i < Math.min(commands.length, 12); i++) {
+  for (let i = 0; i < Math.min(commands.length, 15); i++) {
     const cmd = commands[i];
     if (cmd && (cmd.startsWith('/fill') || cmd.startsWith('/setblock') || cmd.startsWith('/summon'))) {
       bot.chat(cmd);
