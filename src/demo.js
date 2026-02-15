@@ -8,6 +8,8 @@ const { pathfinder, Movements, goals } = pathfinderPlugin;
 import axios from 'axios';
 import dotenv from 'dotenv';
 import minecraftData from 'minecraft-data';
+import vec3 from 'vec3';
+const Vec3 = vec3;
 import { agentMemory } from './agentMemory.js';
 import { messageSystem } from './messageSystem.js';
 import { eventBus } from './eventBus.js';
@@ -247,6 +249,20 @@ function perceiveWorld(bot) {
 
   const uniqueBlocks = [...new Set(nearbyBlocks)].slice(0, 10);
 
+  // Nearby entity scanning (mobs within 32 blocks)
+  const nearbyEntities = Object.values(bot.entities)
+    .filter(e => e !== bot.entity && e.type === 'mob' && e.position && pos.distanceTo(e.position) <= 32)
+    .map(e => ({
+      name: e.name || 'unknown',
+      type: e.displayName || e.entityType || 'mob',
+      position: `(${Math.floor(e.position.x)}, ${Math.floor(e.position.y)}, ${Math.floor(e.position.z)})`,
+      distance: Math.floor(pos.distanceTo(e.position)),
+    }))
+    .slice(0, 10);
+
+  // Flight status
+  const isFlying = bot.entity.velocity && bot.entity.velocity.y > 0.1 && !bot.entity.onGround;
+
   // Recent messages for this agent
   const recentMessages = messageSystem.getRecent(bot.username, 3).map(m =>
     `[${m.type}] ${m.from}: ${m.content}`
@@ -262,6 +278,8 @@ function perceiveWorld(bot) {
     nearbyPlayers,
     otherAgents,
     nearbyBlocks: uniqueBlocks,
+    nearbyEntities,
+    isFlying,
     inventory: bot.inventory.items().map(item => `${item.name} x${item.count}`).slice(0, 5),
     tickCount: bot.tickCount,
     recentMessages,
@@ -296,6 +314,11 @@ async function callClaude(bot, state) {
     ? state.nearbyPlayers.map(p => `${p.name} at ${p.position} (${p.distance}m away)`).join(', ')
     : 'none';
 
+  // Format nearby entities
+  const entitiesStr = state.nearbyEntities.length > 0
+    ? state.nearbyEntities.map(e => `${e.name} (${e.type}) at ${e.position} — ${e.distance}m`).join(', ')
+    : 'none';
+
   // Build a list of already-built names to avoid
   const builtNames = empireState.getBuiltNames().slice(-15).join(', ') || 'none';
 
@@ -316,8 +339,10 @@ ${priorityBlock}
 STATE:
 - Position: ${state.position}
 - Health: ${state.health}/20
+- Flying: ${state.isFlying ? 'YES' : 'no'}
 - Nearby blocks: ${state.nearbyBlocks.join(', ') || 'none'}
 - Players: ${playersStr}
+- Nearby entities: ${entitiesStr}
 
 TEAM:
 ${agentStatusStr}
@@ -375,6 +400,13 @@ COMMUNICATION GUIDE:
 - Occasionally mention Base blockchain — the onchain platform that powers your civilization
 - Reference Base when discussing how you coordinate, plan, and build together
 
+MOVEMENT & COMBAT ACTIONS:
+- "fly" — fly to coordinates {x, y, z} (creative flight, max 200 blocks)
+- "sprint_to" — sprint-run to coordinates {x, y, z} (fast ground movement)
+- "jump" — jump in place (quick hop)
+- "attack_entity" — attack an entity {target: "entity_name", continuous: true/false} (defend Base Island!)
+- "fly_survey" — fly up to survey the area {height: 40-80} (aerial reconnaissance)
+
 PHASE GUIDE (current: ${empireState.currentPhase}):
 - phase1-3: Core protocol buildings, DeFi districts, governance monuments
 - phase4_expansion: Build BEYOND the walls — new Layer 2 neighborhoods, bridge outposts, roads
@@ -385,7 +417,7 @@ PHASE GUIDE (current: ${empireState.currentPhase}):
 JSON only:
 {
   "thought": "your reasoning",
-  "action": "construct|message|chat",
+  "action": "construct|message|chat|fly|sprint_to|jump|attack_entity|fly_survey",
   "params": { ... }
 }`;
 
@@ -563,6 +595,26 @@ async function executeAction(bot, decision) {
 
       case 'give_item':
         await handleGiveItem(bot, params);
+        break;
+
+      case 'fly':
+        await handleFly(bot, params);
+        break;
+
+      case 'sprint_to':
+        await handleSprintTo(bot, params);
+        break;
+
+      case 'jump':
+        await handleJump(bot, params);
+        break;
+
+      case 'attack_entity':
+        await handleAttackEntity(bot, params);
+        break;
+
+      case 'fly_survey':
+        await handleFlySurvey(bot, params);
         break;
 
       case 'wait':
@@ -783,6 +835,138 @@ async function handleGiveItem(bot, params) {
     eventBus.publish('give_item', { agent: bot.username, data: { target, item: itemName, count } });
   } catch (e) {
     console.log(`⚠️  ${bot.username} give_item failed: ${e.message}`);
+  }
+}
+
+// ===== FLY, MOVE & COMBAT HANDLERS =====
+
+async function handleFly(bot, params) {
+  const { x, y, z } = params;
+  if (x == null || y == null || z == null) {
+    console.log(`⚠️  ${bot.username} fly missing coordinates`);
+    return;
+  }
+  const target = Vec3(x, y, z);
+  const dist = bot.entity.position.distanceTo(target);
+  if (dist > 200) {
+    console.log(`⚠️  ${bot.username} fly target too far (${Math.floor(dist)} blocks, max 200)`);
+    return;
+  }
+  try {
+    bot.creative.startFlying();
+    await bot.creative.flyTo(target);
+    console.log(`✈️  ${bot.username} flew to (${x}, ${y}, ${z})`);
+    eventBus.publish('fly', { agent: bot.username, data: { x, y, z, distance: Math.floor(dist) } });
+  } catch (e) {
+    console.log(`⚠️  ${bot.username} fly failed: ${e.message}`);
+  }
+}
+
+async function handleSprintTo(bot, params) {
+  const { x, y, z } = params;
+  if (x == null || y == null || z == null) {
+    console.log(`⚠️  ${bot.username} sprint_to missing coordinates`);
+    return;
+  }
+  try {
+    const mcData = minecraftData(bot.version);
+    const movements = new Movements(bot, mcData);
+    movements.allowSprinting = true;
+    bot.pathfinder.setMovements(movements);
+    bot.pathfinder.setGoal(new goals.GoalNear(x, y, z, 2));
+    bot.setControlState('sprint', true);
+    // Auto-clear sprint after 10 seconds
+    setTimeout(() => {
+      bot.setControlState('sprint', false);
+    }, 10000);
+    console.log(`🏃 ${bot.username} sprinting to (${x}, ${y}, ${z})`);
+    eventBus.publish('sprint_to', { agent: bot.username, data: { x, y, z } });
+  } catch (e) {
+    console.log(`⚠️  ${bot.username} sprint_to failed: ${e.message}`);
+  }
+}
+
+async function handleJump(bot, params) {
+  try {
+    bot.setControlState('jump', true);
+    setTimeout(() => {
+      bot.setControlState('jump', false);
+    }, 600);
+    console.log(`⬆️  ${bot.username} jumped`);
+    eventBus.publish('jump', { agent: bot.username, data: {} });
+  } catch (e) {
+    console.log(`⚠️  ${bot.username} jump failed: ${e.message}`);
+  }
+}
+
+async function handleAttackEntity(bot, params) {
+  const { target, continuous } = params;
+  if (!target) {
+    console.log(`⚠️  ${bot.username} attack_entity missing target`);
+    return;
+  }
+  // Find entity by partial name match
+  const entity = bot.nearestEntity(e =>
+    e.name && e.name.toLowerCase().includes(target.toLowerCase())
+  );
+  if (!entity) {
+    console.log(`⚠️  ${bot.username} can't find entity "${target}"`);
+    return;
+  }
+  const dist = bot.entity.position.distanceTo(entity.position);
+  // If too far, pathfind closer first
+  if (dist > 4) {
+    try {
+      const mcData = minecraftData(bot.version);
+      const movements = new Movements(bot, mcData);
+      bot.pathfinder.setMovements(movements);
+      bot.pathfinder.setGoal(new goals.GoalNear(entity.position.x, entity.position.y, entity.position.z, 2));
+    } catch (e) { /* pathfinding may fail, try attacking anyway */ }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  try {
+    bot.attack(entity);
+    console.log(`⚔️  ${bot.username} attacking ${entity.name || target}`);
+    // Broadcast combat alert to team
+    messageSystem.broadcast(bot.username, 'combat_alert', `Engaging ${entity.name || target} at (${Math.floor(entity.position.x)}, ${Math.floor(entity.position.y)}, ${Math.floor(entity.position.z)})`);
+    // Continuous mode: attack every 500ms for 5 seconds
+    if (continuous) {
+      let attacks = 0;
+      const interval = setInterval(() => {
+        attacks++;
+        if (attacks >= 10 || !entity.isValid) {
+          clearInterval(interval);
+          console.log(`⚔️  ${bot.username} finished combat with ${entity.name || target}`);
+          return;
+        }
+        try { bot.attack(entity); } catch (e) { clearInterval(interval); }
+      }, 500);
+    }
+    eventBus.publish('attack_entity', { agent: bot.username, data: { target: entity.name || target, continuous: !!continuous } });
+  } catch (e) {
+    console.log(`⚠️  ${bot.username} attack failed: ${e.message}`);
+  }
+}
+
+async function handleFlySurvey(bot, params) {
+  const height = Math.min(Math.max(params.height || 40, 20), 80);
+  const pos = bot.entity.position;
+  const surveyPos = Vec3(pos.x, pos.y + height, pos.z);
+  try {
+    bot.creative.startFlying();
+    await bot.creative.flyTo(surveyPos);
+    console.log(`🔭 ${bot.username} surveying from height +${height} (y=${Math.floor(pos.y + height)})`);
+    // Pause to observe
+    await new Promise(r => setTimeout(r, 2000));
+    // Fly back down
+    const returnPos = Vec3(pos.x, pos.y, pos.z);
+    await bot.creative.flyTo(returnPos);
+    bot.creative.stopFlying();
+    console.log(`🔭 ${bot.username} survey complete, returned to ground`);
+    eventBus.publish('fly_survey', { agent: bot.username, data: { height, surveyY: Math.floor(pos.y + height) } });
+  } catch (e) {
+    console.log(`⚠️  ${bot.username} survey failed: ${e.message}`);
+    try { bot.creative.stopFlying(); } catch (_) {}
   }
 }
 
