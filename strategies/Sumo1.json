@@ -1,0 +1,11 @@
+{
+  "name": "Sumo1", "arena": "sumo", "version": 1,
+  "combat": {
+    "center_retreat_threshold": 8, "attack_range": 3.5,
+    "sprint_attack": true, "knockback_combo_delay_ms": 200,
+    "edge_awareness": true, "retreat_sprint_ms": 400,
+    "approach_style": "aggressive"
+  },
+  "notes": "Initial default — tune these values based on combat logs",
+  "history": []
+}

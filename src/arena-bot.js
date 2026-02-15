@@ -8,8 +8,36 @@ import pkg from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pkg;
 import minecraftData from 'minecraft-data';
 import { Rcon } from 'rcon-client';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const RCON_CFG = { host: 'localhost', port: 25575, password: 'minecraft123' };
+
+// ─── Strategy file loading ──────────────────────────────────
+
+const STRAT_DIR = path.join(__dirname, '..', 'strategies');
+const botStrategies = {}; // name → parsed strategy object
+
+function loadStrategy(name) {
+  try {
+    const raw = fs.readFileSync(path.join(STRAT_DIR, name + '.json'), 'utf8');
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+// ─── Per-bot file logging ───────────────────────────────────
+
+const LOG_DIR = '/tmp/arena-logs';
+fs.mkdirSync(LOG_DIR, { recursive: true });
+
+function logToFile(name, msg) {
+  const line = `[${ts()}] [${name}] ${msg}\n`;
+  process.stdout.write(line);
+  fs.appendFileSync(path.join(LOG_DIR, name + '.log'), line);
+}
 
 // ─── Bot pair definitions ──────────────────────────────────
 
@@ -40,10 +68,24 @@ const botStats = {};      // name → { attacks, blocks_dug, arrows_shot, deaths
 const isEating = {};      // name → boolean (prevents golden apple spam)
 const isReturning = {};   // name → boolean (prevents double match-end triggers)
 const isReconnecting = {}; // name → boolean (prevents duplicate reconnect loops)
+let lastSpleefRegen = 0;   // timestamp — debounce snow regen (once per 5s max)
+
+async function regenSpleefSnow() {
+  const now = Date.now();
+  if (now - lastSpleefRegen < 5000) return; // debounce: max once per 5s
+  lastSpleefRegen = now;
+  if (!rcon) return;
+  try {
+    await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
+    await rcon.send('fill -66 11 -11 -44 11 11 snow_block');
+    await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
+    console.log(`[${ts()}] [SPLEEF-REGEN] Snow layers regenerated`);
+  } catch (e) { console.log(`[${ts()}] [SPLEEF-REGEN] Error: ${e.message}`); }
+}
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function ts() { return new Date().toISOString().slice(11, 19); }
-function log(name, msg) { console.log(`[${ts()}] [${name}] ${msg}`); }
+function log(name, msg) { logToFile(name, msg); }
 
 // ─── Get opponent entity from cross-referenced bot ─────────
 
@@ -132,13 +174,23 @@ async function equipForArena(bot, name, arena) {
   } catch (e) { log(name, `Equip error: ${e.message}`); }
 }
 
-// ─── Combat AI ─────────────────────────────────────────────
+// ─── Combat AI (strategy-driven) ─────────────────────────────
 
 async function pvpTick(bot, name, target) {
+  const strat = botStrategies[name];
+  const range = strat?.combat?.attack_range ?? 3.5;
+  const sprintDist = strat?.combat?.chase_sprint_distance ?? 5;
+  const strafeChance = strat?.combat?.strafe_chance ?? 0.5;
+  const strafeDur = strat?.combat?.strafe_duration_ms ?? 200;
+  const critChance = strat?.combat?.sprint_jump_crit_chance ?? 0.3;
+  const critDur = strat?.combat?.crit_duration_ms ?? 300;
+  const healThresh = strat?.combat?.heal_threshold ?? 10;
+  const shieldAfter = strat?.combat?.shield_after_attack ?? false;
+
   const dist = bot.entity.position.distanceTo(target.position);
 
   // Eat golden apple when low HP (with lock to prevent spam)
-  if (bot.health < 10 && !isEating[name]) {
+  if (bot.health < healThresh && !isEating[name]) {
     const apple = bot.inventory.items().find(i => i.name === 'golden_apple');
     if (apple) {
       isEating[name] = true;
@@ -156,10 +208,10 @@ async function pvpTick(bot, name, target) {
     }
   }
 
-  if (dist > 3.5) {
+  if (dist > range) {
     try { await bot.lookAt(target.position.offset(0, 1.6, 0)); } catch {}
     bot.setControlState('forward', true);
-    bot.setControlState('sprint', dist > 5);
+    bot.setControlState('sprint', dist > sprintDist);
   } else {
     bot.setControlState('forward', false);
     bot.setControlState('sprint', false);
@@ -168,22 +220,36 @@ async function pvpTick(bot, name, target) {
       bot.attack(target);
       botStats[name].attacks++;
 
-      // Strafe
-      const dir = Math.random() > 0.5 ? 'left' : 'right';
-      bot.setControlState(dir, true);
-      setTimeout(() => bot.setControlState(dir, false), 200);
+      // Shield after attack
+      if (shieldAfter) {
+        bot.activateItem(); // raise shield (off-hand)
+        setTimeout(() => bot.deactivateItem(), 300);
+      }
 
-      // Sprint-jump crit (30%)
-      if (Math.random() < 0.3) {
+      // Strafe
+      if (Math.random() < strafeChance) {
+        const dir = Math.random() > 0.5 ? 'left' : 'right';
+        bot.setControlState(dir, true);
+        setTimeout(() => bot.setControlState(dir, false), strafeDur);
+      }
+
+      // Sprint-jump crit
+      if (Math.random() < critChance) {
         bot.setControlState('sprint', true);
         bot.setControlState('jump', true);
-        setTimeout(() => { bot.setControlState('sprint', false); bot.setControlState('jump', false); }, 300);
+        setTimeout(() => { bot.setControlState('sprint', false); bot.setControlState('jump', false); }, critDur);
       }
     } catch (e) { log(name, `Attack err: ${e.message}`); }
   }
 }
 
 async function sumoTick(bot, name, target) {
+  const strat = botStrategies[name];
+  const retreatThresh = strat?.combat?.center_retreat_threshold ?? 8;
+  const range = strat?.combat?.attack_range ?? 3.5;
+  const comboDelay = strat?.combat?.knockback_combo_delay_ms ?? 200;
+  const retreatSprint = strat?.combat?.retreat_sprint_ms ?? 400;
+
   const dist = bot.entity.position.distanceTo(target.position);
   const pos = bot.entity.position;
 
@@ -199,13 +265,13 @@ async function sumoTick(bot, name, target) {
 
   // Edge detection — retreat to center if near edge
   const distToCenter = Math.sqrt((pos.x - SUMO_CENTER.x) ** 2 + (pos.z - SUMO_CENTER.z) ** 2);
-  if (distToCenter > SUMO_PLATFORM_RADIUS - 2 && dist > 2) {
+  if (distToCenter > SUMO_PLATFORM_RADIUS - retreatThresh && dist > 2) {
     try {
       await bot.lookAt({ x: SUMO_CENTER.x, y: SUMO_CENTER.y + 1.6, z: SUMO_CENTER.z });
     } catch {}
     bot.setControlState('forward', true);
     bot.setControlState('sprint', true);
-    setTimeout(() => { bot.setControlState('forward', false); bot.setControlState('sprint', false); }, 400);
+    setTimeout(() => { bot.setControlState('forward', false); bot.setControlState('sprint', false); }, retreatSprint);
     return;
   }
 
@@ -213,16 +279,23 @@ async function sumoTick(bot, name, target) {
   bot.setControlState('sprint', true);
   bot.setControlState('forward', true);
 
-  if (dist <= 3.5) {
+  if (dist <= range) {
     try {
       bot.attack(target);
       botStats[name].attacks++;
     } catch {}
-    setTimeout(() => { bot.setControlState('sprint', false); bot.setControlState('forward', false); }, 200);
+    setTimeout(() => { bot.setControlState('sprint', false); bot.setControlState('forward', false); }, comboDelay);
   }
 }
 
 async function spleefTick(bot, name, target) {
+  const strat = botStrategies[name];
+  const chaseDist = strat?.combat?.chase_distance ?? 4;
+  const sprintThresh = strat?.combat?.sprint_threshold ?? 7;
+  const digRX = strat?.combat?.dig_radius_x ?? 2;
+  const digRZ = strat?.combat?.dig_radius_z ?? 2;
+  const digDepth = strat?.combat?.dig_depth ?? 3;
+
   // Ensure shovel equipped
   const shovel = bot.inventory.items().find(i => i.name === 'iron_shovel');
   if (shovel && bot.heldItem?.name !== 'iron_shovel') {
@@ -232,9 +305,9 @@ async function spleefTick(bot, name, target) {
   const dist = bot.entity.position.distanceTo(target.position);
   try { await bot.lookAt(target.position); } catch {}
 
-  if (dist > 4) {
+  if (dist > chaseDist) {
     bot.setControlState('forward', true);
-    bot.setControlState('sprint', dist > 7);
+    bot.setControlState('sprint', dist > sprintThresh);
     return;
   }
 
@@ -243,9 +316,9 @@ async function spleefTick(bot, name, target) {
 
   // Dig snow under/near opponent — search wider area
   const tp = target.position;
-  for (let dy = 0; dy >= -3; dy--) {
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dz = -2; dz <= 2; dz++) {
+  for (let dy = 0; dy >= -digDepth; dy--) {
+    for (let dx = -digRX; dx <= digRX; dx++) {
+      for (let dz = -digRZ; dz <= digRZ; dz++) {
         try {
           const block = bot.blockAt(tp.offset(dx, dy, dz));
           if (block && block.name === 'snow_block') {
@@ -281,6 +354,19 @@ async function spleefTick(bot, name, target) {
 
 const lastBowShot = {};
 async function archeryTick(bot, name, target) {
+  const strat = botStrategies[name];
+  const strafeChance = strat?.combat?.strafe_chance ?? 0.4;
+  const strafeDur = strat?.combat?.strafe_duration_ms ?? 400;
+  const fwdChance = strat?.combat?.forward_chance ?? 0.15;
+  const bwdChance = strat?.combat?.backward_chance ?? 0.15;
+  const moveDur = strat?.combat?.move_duration_ms ?? 300;
+  const chargeBase = strat?.combat?.charge_base_ms ?? 300;
+  const chargePerDist = strat?.combat?.charge_per_distance_ms ?? 20;
+  const maxCharge = strat?.combat?.max_charge_ms ?? 1000;
+  const gravBase = strat?.combat?.gravity_base ?? 1.6;
+  const gravPerDist = strat?.combat?.gravity_per_distance ?? 0.04;
+  const cooldown = strat?.combat?.cooldown_ms ?? 1500;
+
   // Equip bow
   const bow = bot.inventory.items().find(i => i.name === 'bow');
   if (bow && bot.heldItem?.name !== 'bow') {
@@ -291,15 +377,15 @@ async function archeryTick(bot, name, target) {
   const now = Date.now();
 
   // Gravity compensation
-  const yOffset = 1.6 + (dist * 0.04);
+  const yOffset = gravBase + (dist * gravPerDist);
   try { await bot.lookAt(target.position.offset(0, yOffset, 0)); } catch {}
 
   if (!lastBowShot[name]) lastBowShot[name] = 0;
 
   // Shoot with cooldown
-  if (now - lastBowShot[name] > 1500) {
+  if (now - lastBowShot[name] > cooldown) {
     bot.activateItem();
-    const chargeTime = Math.min(1000, 300 + dist * 20);
+    const chargeTime = Math.min(maxCharge, chargeBase + dist * chargePerDist);
     setTimeout(async () => {
       try { await bot.lookAt(target.position.offset(0, yOffset, 0)); } catch {}
       bot.deactivateItem();
@@ -309,18 +395,18 @@ async function archeryTick(bot, name, target) {
   }
 
   // MOVING TARGET — constant strafing between shots
-  if (Math.random() < 0.4) {
+  if (Math.random() < strafeChance) {
     const dir = Math.random() > 0.5 ? 'left' : 'right';
     bot.setControlState(dir, true);
-    setTimeout(() => bot.setControlState(dir, false), 400);
+    setTimeout(() => bot.setControlState(dir, false), strafeDur);
   }
-  if (Math.random() < 0.15) {
+  if (Math.random() < fwdChance) {
     bot.setControlState('forward', true);
-    setTimeout(() => bot.setControlState('forward', false), 300);
+    setTimeout(() => bot.setControlState('forward', false), moveDur);
   }
-  if (Math.random() < 0.15) {
+  if (Math.random() < bwdChance) {
     bot.setControlState('back', true);
-    setTimeout(() => bot.setControlState('back', false), 300);
+    setTimeout(() => bot.setControlState('back', false), moveDur);
   }
 
   // Stay in bounds — if drifting out, walk back toward center
@@ -345,6 +431,10 @@ async function returnToArena(bot, name, arena, spawn, stats) {
 
   await sleep(5000);
   try {
+    if (arena === 'spleef') {
+      await regenSpleefSnow();
+      await sleep(500);
+    }
     bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
     await sleep(2000);
     bot.chat('/clear @s');
@@ -375,6 +465,16 @@ async function entityCleanup() {
 
 function createArenaBot(def) {
   const { name, arena, spawn, opponent } = def;
+
+  // Load strategy file
+  const strat = loadStrategy(name);
+  botStrategies[name] = strat;
+  if (strat) {
+    log(name, `Loaded strategy v${strat.version} for ${arena} arena`);
+  } else {
+    log(name, `No strategy file found, using defaults for ${arena} arena`);
+  }
+
   log(name, `Creating bot for ${arena} arena...`);
 
   const bot = mineflayer.createBot({
@@ -394,6 +494,7 @@ function createArenaBot(def) {
 
   let combatInterval = null;
   let healthCheckInterval = null;
+  let heatmapInterval = null;
 
   bot.once('spawn', async () => {
     log(name, 'Spawned! Waiting for OP...');
@@ -429,7 +530,7 @@ function createArenaBot(def) {
       }
     }, 250);
 
-    // Health check every 10s
+    // Health check every 10s — logged to per-bot file
     healthCheckInterval = setInterval(() => {
       if (!bot.entity) return;
       const stats = botStats[name];
@@ -437,7 +538,7 @@ function createArenaBot(def) {
       const target = getOpponentEntity(name, opponent);
       const dist = target ? bot.entity.position.distanceTo(target.position).toFixed(1) : 'N/A';
 
-      console.log(`[HEALTH-CHECK][${name}] HP:${bot.health?.toFixed(1) || '?'}/20 | ` +
+      logToFile(name, `[HEALTH-CHECK] HP:${bot.health?.toFixed(1) || '?'}/20 | ` +
         `Pos:(${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) | ` +
         `Opponent:${opponent} dist:${dist} | Arena:${arena} | ` +
         `ATK:${stats.attacks} DIG:${stats.blocks_dug} ARW:${stats.arrows_shot} | ` +
@@ -446,9 +547,9 @@ function createArenaBot(def) {
       // Stale detection
       if (!target) {
         stats.staleTicks++;
-        console.log(`[STALE-WARNING][${name}] Cannot find ${opponent} for ${stats.staleTicks * 10}s`);
+        logToFile(name, `[STALE-WARNING] Cannot find ${opponent} for ${stats.staleTicks * 10}s`);
         if (stats.staleTicks >= 3) {
-          console.log(`[STALE-RECOVERY][${name}] Re-teleporting to spawn...`);
+          logToFile(name, `[STALE-RECOVERY] Re-teleporting to spawn...`);
           bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
           stats.staleTicks = 0;
         }
@@ -461,6 +562,18 @@ function createArenaBot(def) {
         returnToArena(bot, name, arena, spawn, stats);
       }
     }, 10000);
+
+    // Heatmap logging every 1s
+    heatmapInterval = setInterval(() => {
+      if (!bot.entity) return;
+      const p = bot.entity.position;
+      const entry = JSON.stringify({
+        t: Date.now(), x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1),
+        hp: bot.health, food: bot.food, yaw: +bot.entity.yaw.toFixed(2),
+        active: botStats[name].active
+      });
+      fs.appendFileSync(path.join(LOG_DIR, name + '-heatmap.jsonl'), entry + '\n');
+    }, 1000);
   });
 
   // Death handler
@@ -480,6 +593,11 @@ function createArenaBot(def) {
 
     setTimeout(async () => {
       try {
+        // Regen spleef snow BEFORE teleporting back (prevents instant fall loop)
+        if (arena === 'spleef') {
+          await regenSpleefSnow();
+          await sleep(500); // let fill commands propagate
+        }
         bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
         await sleep(2000);
         bot.chat('/clear @s');
@@ -520,6 +638,7 @@ function createArenaBot(def) {
   function cleanup() {
     if (combatInterval) { clearInterval(combatInterval); combatInterval = null; }
     if (healthCheckInterval) { clearInterval(healthCheckInterval); healthCheckInterval = null; }
+    if (heatmapInterval) { clearInterval(heatmapInterval); heatmapInterval = null; }
     botStats[name].active = false;
     delete botInstances[name];
   }

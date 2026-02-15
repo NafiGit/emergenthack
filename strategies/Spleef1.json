@@ -1,0 +1,11 @@
+{
+  "name": "Spleef1", "arena": "spleef", "version": 1,
+  "combat": {
+    "chase_distance": 4, "sprint_threshold": 7,
+    "dig_radius_x": 2, "dig_radius_z": 2, "dig_depth": 3,
+    "dig_under_self_fallback": true,
+    "approach_style": "chase_then_dig"
+  },
+  "notes": "Initial default — tune these values based on combat logs",
+  "history": []
+}
