@@ -599,12 +599,23 @@ async function main() {
   }, 180000);
 
   // Scoreboard sidebar updater — update live stats every 5s
+  // Bot name → sidebar team mapping (sb05-sb12)
+  const botSidebarTeam = {
+    Pvp1: 'sb05', Pvp2: 'sb06',
+    Sumo1: 'sb07', Sumo2: 'sb08',
+    Spleef1: 'sb09', Spleef2: 'sb10',
+    Archer1: 'sb11', Archer2: 'sb12',
+  };
+  const botColor = {
+    Pvp1: 'yellow', Pvp2: 'yellow',
+    Sumo1: 'green', Sumo2: 'green',
+    Spleef1: 'aqua', Spleef2: 'aqua',
+    Archer1: 'red', Archer2: 'red',
+  };
   setInterval(async () => {
     if (!rcon) return;
     try {
-      // Sum up total kills and wins across all bots
       let totalKills = 0;
-      let totalWins = 0;
       let totalDeaths = 0;
       let activeFights = 0;
       for (const stats of Object.values(botStats)) {
@@ -613,22 +624,24 @@ async function main() {
         if (stats.active) activeFights++;
       }
 
-      // Read actual wins from scoreboard
-      const winsResult = await rcon.send('scoreboard players list');
-
-      // Update sidebar team prefixes with live data
-      // Line 3: Mode + active fighters
+      // Line 3: active fighters count
       await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/8","color":"aqua"}]`);
 
-      // Line 6: Total kills (attacks landed)
-      await rcon.send(`team modify sb06 prefix [{"text":"Kills: ","color":"gray"},{"text":"${totalKills}","color":"yellow"}]`);
+      // Lines 5-12: individual bot names with kills/deaths
+      for (const [bName, team] of Object.entries(botSidebarTeam)) {
+        const s = botStats[bName];
+        if (!s) continue;
+        const color = botColor[bName];
+        const statusIcon = s.active ? '\u2694 ' : '\u25cb ';
+        await rcon.send(`team modify ${team} prefix [{"text":"${statusIcon}${bName}","color":"${color}"},{"text":" ${s.attacks}K ${s.deaths}D","color":"gray"}]`);
+      }
 
-      // Line 7: Total deaths
-      await rcon.send(`team modify sb07 prefix [{"text":"Deaths: ","color":"gray"},{"text":"${totalDeaths}","color":"red"}]`);
+      // Line 14: totals
+      await rcon.send(`team modify sb14 prefix [{"text":"Kills: ","color":"gray"},{"text":"${totalKills}","color":"yellow"},{"text":" Deaths: ","color":"gray"},{"text":"${totalDeaths}","color":"red"}]`);
 
       // Also update kills scoreboard objective per bot
-      for (const [name, stats] of Object.entries(botStats)) {
-        await rcon.send(`scoreboard players set ${name} kills ${stats.attacks}`);
+      for (const [bName, stats] of Object.entries(botStats)) {
+        await rcon.send(`scoreboard players set ${bName} kills ${stats.attacks}`);
       }
     } catch {}
   }, 5000);
