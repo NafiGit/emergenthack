@@ -53,7 +53,7 @@ console.log('🔵 Powered by Base: Onchain AI Civilization\n');
 const empireState = {
   builtStructures: [],
   currentPhase: 'phase1_core',
-  buildOrigin: { x: 200, y: 76, z: 200 }, // Base Island center
+  buildOrigin: { x: 500, y: 76, z: 500 }, // Base Island center (logo area)
   phaseNames: [
     'phase1_core', 'phase2_district', 'phase3_grand',
     'phase4_expansion', 'phase5_wonders', 'phase6_megacity',
@@ -149,7 +149,7 @@ function createAgent(agentConfig) {
 
     // Teleport to Base Island on spawn
     setTimeout(() => {
-      const positions = { 'Saumya': '220 77 190', 'Sumedha': '180 77 200', 'Ahaan': '200 77 215' };
+      const positions = { 'Saumya': '490 77 505', 'Sumedha': '500 77 505', 'Ahaan': '510 77 505' };
       bot.chat(`/tp @s ${positions[agentConfig.name] || '200 77 200'}`);
       bot.chat('/gamemode creative @s');
     }, 1000);
@@ -330,18 +330,20 @@ ${empireState.getSummary()}
 ALREADY BUILT (do NOT repeat these names): ${builtNames}
 
 BASE ISLAND MAP:
-- Island center: (200, 76, 200), grass from (170,75,170) to (230,75,230)
-- Protocol Hub at (195,76,205)-(215,83,220)
-- Token Farm at (220,75,175)-(235,76,195)
-- DeFi Houses at (175,76,175)-(183,81,199)
-- Validator Forge at (190,76,225)-(200,81,232)
-- Onchain Library at (218,76,208)-(226,83,216)
-- DEX Marketplace at (188,76,170)-(211,80,173)
-- Sequencer Tower at (228,76,170)-(232,91,174)
-- Walls around perimeter (172-228, z:170-230)
-- BASE text at (132,77,135)-(272,77,160)
-- Lighthouse at (233,76,198)-(237,91,202)
-- Bridge Port at (195,74,231)-(205,75,238)
+- Island center: (500, 76, 500), white_concrete platform from (450,76,470) to (550,76,525)
+- Huge BASE logo letters at y=77-96 (20 blocks tall, blue_concrete on prismarine base)
+  - B at (463,77,490)-(477,96,492)
+  - A at (482,77,490)-(496,96,492)
+  - S at (501,77,490)-(515,96,492)
+  - E at (520,77,490)-(534,96,492)
+- Agent Hub at (475,76,475)-(525,84,487) behind the letters
+- Blue stained glass wall at (460,77,487)-(540,82,487)
+- Viewing Plaza at (458,76,500)-(542,76,520) with fountain
+- Fountain at (497,76,510)-(503,76,516)
+- Corner beacon pillars at (454,474), (546,474), (454,521), (546,521)
+- Iron bar fence along south edge at z=520
+- Blue concrete border at platform edges
+- BUILD OUTWARD from the platform edges! Expand north, south, east, west
 
 BLOCK PALETTE — ALWAYS prefer blue & white blocks for the Base theme:
 - Primary: blue_concrete, white_concrete
