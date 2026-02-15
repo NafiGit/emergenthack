@@ -95,6 +95,19 @@ const AREA_SELECTORS = {
   archery: 'x=-14,y=0,z=-62,dx=28,dy=30,dz=14',
 };
 
+// Arena bounding boxes for position checks (prevents fighting at hub after death respawn)
+const ARENA_BOXES = {
+  pvp:     { x1: -12, z1: 43, x2: 12, z2: 67 },
+  sumo:    { x1: 43,  z1: -12, x2: 67, z2: 12 },
+  spleef:  { x1: -67, z1: -12, x2: -43, z2: 12 },
+  archery: { x1: -14, z1: -62, x2: 14, z2: -48 },
+};
+
+function isInArena(pos, arena) {
+  const b = ARENA_BOXES[arena];
+  return pos.x >= b.x1 && pos.x <= b.x2 && pos.z >= b.z1 && pos.z <= b.z2;
+}
+
 const MATCH_DURATION = 120000; // 2 minutes
 
 // ─── The Game Loop (one per arena, runs forever) ──────
@@ -679,6 +692,7 @@ function createArenaBot(def) {
     combatInterval = setInterval(async () => {
       if (arenaMatches[arena]?.state !== 'ACTIVE') return;
       if (!botStats[name].active) return;
+      if (!bot.entity?.position || !isInArena(bot.entity.position, arena)) return;
       const target = getOpponentEntity(name, opponent);
       if (!target) return;
       botStats[name].tickCount++;
