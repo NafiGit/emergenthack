@@ -1,4 +1,4 @@
-// SYNAPSE FORGE - Minecraft Java Server Launcher (1.19.2 + Java 17)
+// BASE ISLAND - Minecraft Java Server Launcher (1.19.2 + Java 17)
 
 import { spawn } from 'child_process';
 import { existsSync, writeFileSync } from 'fs';
@@ -11,7 +11,7 @@ const SERVER_JAR = join(SERVER_DIR, 'server.jar');
 const EULA_FILE = join(SERVER_DIR, 'eula.txt');
 const PORT = 25565;
 
-console.log('🎮 Starting Synapse Forge Minecraft Server (Java 1.19.2)...\n');
+console.log('🎮 Starting Base Island Minecraft Server (Java 1.19.2)...\n');
 
 // Verify server.jar exists
 if (!existsSync(SERVER_JAR)) {

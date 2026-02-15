@@ -1,9 +1,8 @@
 {
-  "name": "emergent-island",
+  "name": "base-island",
   "version": "1.0.0",
-  "description": "AI-powered self-sustaining Minecraft civilization — Built with Emergent (emergent.sh)",
+  "description": "AI-powered blockchain civilization on Base — blue & white onchain world",
   "type": "module",
-  "homepage": "https://emergent.sh",
   "scripts": {
     "server": "node server/start-server.js",
     "server-flying": "node server/start-server.js",

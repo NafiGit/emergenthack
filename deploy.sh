@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== EMERGENT ISLAND - VM DEPLOYMENT ==="
+echo "=== BASE ISLAND - VM DEPLOYMENT ==="
 echo "Setting up on $(hostname) at $(date)"
 
 # System updates & dependencies
@@ -73,7 +73,7 @@ enable-query=false
 generator-settings={}
 enforce-secure-profile=false
 level-name=world
-motd=Emergent Island - AI Civilization
+motd=Base Island - Onchain AI Civilization
 query.port=25565
 pvp=true
 generate-structures=true
@@ -122,10 +122,10 @@ PROPEOF
 # OPs file
 cat > ops.json << 'OPSEOF'
 [
-  {"uuid":"00000000-0000-0000-0000-000000000004","name":"Sage","level":4,"bypassesPlayerLimit":false},
+  {"uuid":"00000000-0000-0000-0000-000000000004","name":"Ahaan","level":4,"bypassesPlayerLimit":false},
   {"uuid":"00000000-0000-0000-0000-000000000001","name":"Architect","level":4,"bypassesPlayerLimit":false},
-  {"uuid":"00000000-0000-0000-0000-000000000002","name":"Vulkan","level":4,"bypassesPlayerLimit":false},
-  {"uuid":"00000000-0000-0000-0000-000000000003","name":"Terra","level":4,"bypassesPlayerLimit":false}
+  {"uuid":"00000000-0000-0000-0000-000000000002","name":"Saumya","level":4,"bypassesPlayerLimit":false},
+  {"uuid":"00000000-0000-0000-0000-000000000003","name":"Sumedha","level":4,"bypassesPlayerLimit":false}
 ]
 OPSEOF
 
@@ -191,7 +191,7 @@ PUBLIC_IP=$(curl -s ifconfig.me)
 
 echo ""
 echo "==========================================="
-echo "   EMERGENT ISLAND IS LIVE!"
+echo "   BASE ISLAND IS LIVE!"
 echo "==========================================="
 echo ""
 echo "   Web Client:  http://${PUBLIC_IP}:8080"

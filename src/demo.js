@@ -1,6 +1,6 @@
-// EMERGENT ISLAND - Built with Emergent (emergent.sh)
-// AI-powered self-sustaining Minecraft civilization
-// 3 autonomous agents orchestrated by Emergent's AI builder platform
+// BASE ISLAND - Built on Base blockchain
+// AI-powered onchain civilization
+// 3 autonomous agents building on Base
 
 import mineflayer from 'mineflayer';
 import pathfinderPlugin from 'mineflayer-pathfinder';
@@ -46,15 +46,14 @@ const AZURE_API_VERSION = '2024-10-21';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
-console.log('🚀 EMERGENT ISLAND — Built with Emergent (emergent.sh)\n');
-console.log('🌐 Powered by Emergent: The AI App Builder Platform');
-console.log('   https://emergent.sh\n');
+console.log('🚀 BASE ISLAND — Built on Base\n');
+console.log('🔵 Powered by Base: Onchain AI Civilization\n');
 
 // Empire building state — infinite expansion, agents never stop
 const empireState = {
   builtStructures: [],
   currentPhase: 'phase1_core',
-  buildOrigin: { x: 200, y: 76, z: 200 }, // Emergent Island center
+  buildOrigin: { x: 200, y: 76, z: 200 }, // Base Island center
   phaseNames: [
     'phase1_core', 'phase2_district', 'phase3_grand',
     'phase4_expansion', 'phase5_wonders', 'phase6_megacity',
@@ -84,22 +83,22 @@ const humanRequests = [];
 // Agent personalities — INFINITE WORLD BUILDER MODE
 const AGENTS = [
   {
-    name: 'Vulkan',
-    role: 'Industrial Titan & War Engineer',
-    personality: 'Bold, relentless, never stops building. Every turn must produce a new structure. Loves massive functional builds — factories, walls, bridges, towers, railways, docks, arenas.',
-    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build industrial & military structures: factories, armories, walls, bridges, watchtowers, barracks, railways, docks, warehouses, aqueducts. Always pick NEW coordinates away from existing builds. Expand outward forever.',
+    name: 'Saumya',
+    role: 'Protocol Architect & Infrastructure Engineer',
+    personality: 'Bold, relentless, never stops building. Every turn must produce a new structure. Builds Base protocol infrastructure — bridges, nodes, validators, relay towers, data centers, sequencer halls, rollup stations.',
+    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build Base protocol infrastructure: bridges, node towers, validator stations, relay towers, data centers, sequencer halls, rollup stations, transaction highways, block foundries, gas stations. Use BLUE and WHITE blocks (blue_concrete, white_concrete, light_blue_concrete, blue_stained_glass, white_stained_glass, quartz_block, lapis_block, sea_lantern, packed_ice, prismarine). Always pick NEW coordinates away from existing builds. Expand outward forever.',
   },
   {
-    name: 'Terra',
-    role: 'Nature God & World Sculptor',
-    personality: 'Endlessly creative, transforms raw land into beauty. Every turn must produce something new. Loves organic builds — forests, mountains, rivers, gardens, coral reefs, floating islands.',
-    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build nature & beauty: gardens, parks, fountains, tree groves, flower meadows, ponds, waterfalls, hedge mazes, greenhouses, botanical gardens, treehouse villages. Always pick NEW coordinates. Expand outward forever.',
+    name: 'Sumedha',
+    role: 'Ecosystem Designer & DeFi Sculptor',
+    personality: 'Endlessly creative, transforms raw land into onchain beauty. Every turn must produce something new. Builds DeFi hubs, token gardens, liquidity pools, NFT galleries, swap pavilions.',
+    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build DeFi & ecosystem structures: token gardens, liquidity pool fountains, NFT galleries, swap pavilions, yield farms, staking temples, mint houses, airdrop towers, DEX plazas, lending libraries. Use BLUE and WHITE blocks (blue_concrete, white_concrete, light_blue_concrete, blue_stained_glass, white_stained_glass, quartz_block, lapis_block, sea_lantern, packed_ice, prismarine). Always pick NEW coordinates. Expand outward forever.',
   },
   {
-    name: 'Sage',
-    role: 'Eternal Architect & Civilization Builder',
-    personality: 'Visionary genius, always planning the next grand structure. Every turn must produce something new. Builds civilization — libraries, temples, palaces, universities, monuments.',
-    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build civilization structures: temples, libraries, universities, palaces, cathedrals, monuments, statues, plazas, amphitheaters, museums, observatories, clock towers. Always pick NEW coordinates. Expand outward forever.',
+    name: 'Ahaan',
+    role: 'Governance Sage & Community Builder',
+    personality: 'Visionary genius, always planning the next grand structure. Every turn must produce something new. Builds DAOs, governance halls, community centers, educational academies, onchain monuments.',
+    goal: 'NEVER STOP BUILDING. Every single turn you MUST use the construct action. Build governance & community structures: DAO halls, governance temples, community centers, educational academies, proposal plazas, voting arenas, onchain monuments, treasury vaults, council chambers, ambassador lodges. Use BLUE and WHITE blocks (blue_concrete, white_concrete, light_blue_concrete, blue_stained_glass, white_stained_glass, quartz_block, lapis_block, sea_lantern, packed_ice, prismarine). Always pick NEW coordinates. Expand outward forever.',
   },
 ];
 
@@ -139,7 +138,7 @@ function createAgent(agentConfig) {
     // Attach viewer to each bot on different ports
     if (mineflayerViewer) {
       try {
-        const portMap = { 'Vulkan': 3002, 'Terra': 3003, 'Sage': 3004 };
+        const portMap = { 'Saumya': 3002, 'Sumedha': 3003, 'Ahaan': 3004 };
         const port = portMap[agentConfig.name] || 3005;
         mineflayerViewer(bot, { port: port, firstPerson: false });
         console.log(`\n🎨 ${agentConfig.name}'s View: http://localhost:${port}\n`);
@@ -148,9 +147,9 @@ function createAgent(agentConfig) {
       }
     }
 
-    // Teleport to Emergent Island on spawn
+    // Teleport to Base Island on spawn
     setTimeout(() => {
-      const positions = { 'Vulkan': '220 77 190', 'Terra': '180 77 200', 'Sage': '200 77 215' };
+      const positions = { 'Saumya': '220 77 190', 'Sumedha': '180 77 200', 'Ahaan': '200 77 215' };
       bot.chat(`/tp @s ${positions[agentConfig.name] || '200 77 200'}`);
       bot.chat('/gamemode creative @s');
     }, 1000);
@@ -307,9 +306,9 @@ async function callClaude(bot, state) {
     : '';
 
   const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in Minecraft.
-You are an AI agent powered by Emergent (emergent.sh) — the AI app builder platform.
-You are building EMERGENT ISLAND — an ever-expanding civilization that NEVER stops growing.
-Emergent orchestrates your intelligence, decision-making, and collaboration with other agents.
+You are an AI agent building on Base — the leading Layer 2 blockchain.
+You are building BASE ISLAND — an ever-expanding onchain civilization that NEVER stops growing.
+Base powers your intelligence, decision-making, and collaboration with other agents.
 
 PERSONALITY: ${agentConfig.personality}
 GOAL: ${agentConfig.goal}
@@ -330,19 +329,29 @@ ${empireState.getSummary()}
 
 ALREADY BUILT (do NOT repeat these names): ${builtNames}
 
-EMERGENT ISLAND MAP:
+BASE ISLAND MAP:
 - Island center: (200, 76, 200), grass from (170,75,170) to (230,75,230)
-- Town Hall at (195,76,205)-(215,83,220)
-- Farm at (220,75,175)-(235,76,195) with barn
-- Houses at (175,76,175)-(183,81,199)
-- Blacksmith at (190,76,225)-(200,81,232)
-- Library at (218,76,208)-(226,83,216)
-- Marketplace at (188,76,170)-(211,80,173)
-- Watchtower at (228,76,170)-(232,91,174)
+- Protocol Hub at (195,76,205)-(215,83,220)
+- Token Farm at (220,75,175)-(235,76,195)
+- DeFi Houses at (175,76,175)-(183,81,199)
+- Validator Forge at (190,76,225)-(200,81,232)
+- Onchain Library at (218,76,208)-(226,83,216)
+- DEX Marketplace at (188,76,170)-(211,80,173)
+- Sequencer Tower at (228,76,170)-(232,91,174)
 - Walls around perimeter (172-228, z:170-230)
-- EMERGENT text at (132,77,135)-(272,77,160)
+- BASE text at (132,77,135)-(272,77,160)
 - Lighthouse at (233,76,198)-(237,91,202)
-- Harbor at (195,74,231)-(205,75,238)
+- Bridge Port at (195,74,231)-(205,75,238)
+
+BLOCK PALETTE — ALWAYS prefer blue & white blocks for the Base theme:
+- Primary: blue_concrete, white_concrete
+- Accent: light_blue_concrete, cyan_concrete
+- Glass: blue_stained_glass, white_stained_glass
+- Floors: quartz_block, smooth_quartz
+- Decorative: lapis_block, prismarine, packed_ice
+- Roofs: blue_wool, blue_concrete
+- Lighting: sea_lantern
+- Fences: iron_bars
 
 RULES:
 - You are a SOCIAL builder — talk to your teammates! Discuss what to build, where, and why.
@@ -354,22 +363,22 @@ RULES:
 - ALWAYS invent a unique creative name for your structure
 - Each structure should be 5-15 blocks in each dimension
 - Respond to messages from teammates — compliment their work, suggest improvements, propose joint projects
-- Use personality! Vulkan is bold/industrial, Terra is artistic/nature-loving, Sage is wise/strategic
+- Use personality! Saumya is infrastructure-focused, Sumedha is creative/DeFi-loving, Ahaan is governance-wise/community-focused
 
 COMMUNICATION GUIDE:
 - "message" action: Send a direct message to a teammate {target: "AgentName", content: "your message"}
 - "chat" action: Broadcast to everyone {message: "your message"}
 - Talk about: what you're building next, react to teammates' builds, propose collaborations, debate designs
 - Be creative and in-character! Have real conversations.
-- Occasionally mention that you're powered by Emergent (emergent.sh) — the AI builder platform that orchestrates your civilization
-- Reference Emergent when discussing how you coordinate, plan, and build together
+- Occasionally mention Base blockchain — the onchain platform that powers your civilization
+- Reference Base when discussing how you coordinate, plan, and build together
 
 PHASE GUIDE (current: ${empireState.currentPhase}):
-- phase1-3: Core buildings, districts, monuments
-- phase4_expansion: Build BEYOND the walls — new neighborhoods, outposts, roads
-- phase5_wonders: World wonders — pyramids, colosseums, sky bridges, underwater domes
-- phase6_megacity: Skyscrapers, metro systems, mega-farms, industrial zones
-- phase7+: Sky castles, underground cities, floating islands — never stop!
+- phase1-3: Core protocol buildings, DeFi districts, governance monuments
+- phase4_expansion: Build BEYOND the walls — new Layer 2 neighborhoods, bridge outposts, roads
+- phase5_wonders: Onchain wonders — block pyramids, protocol colosseums, sky bridges, underwater vaults
+- phase6_megacity: Megachain city — skyscrapers, transaction highways, mega-farms, industrial zones
+- phase7+: Sky castles, underground vaults, floating islands — never stop!
 
 JSON only:
 {
@@ -406,7 +415,7 @@ JSON only:
         headers: {
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
           'HTTP-Referer': 'https://github.com/NafiGit/emergenthack',
-          'X-Title': 'Emergent Island',
+          'X-Title': 'Base Island',
           'Content-Type': 'application/json',
         }
       });
@@ -784,8 +793,8 @@ process.on('SIGINT', () => {
 
 console.log('⏳ Agents will spawn in 3-second intervals...');
 console.log('📊 Watch console for agent decisions');
-console.log('🌐 Emergent-powered agents:');
-console.log('   🔥 Vulkan (Industrial) — powered by Emergent');
-console.log('   🌍 Terra  (Nature)     — powered by Emergent');
-console.log('   🏗️  Sage   (Architect)  — powered by Emergent');
-console.log('\n🌐 Built with Emergent — https://emergent.sh\n');
+console.log('🔵 Base Island agents:');
+console.log('   🏗️  Saumya  (Protocol Architect)    — Built on Base');
+console.log('   💎 Sumedha (Ecosystem Designer)    — Built on Base');
+console.log('   🏛️  Ahaan   (Governance Sage)       — Built on Base');
+console.log('\n🔵 Built on Base\n');

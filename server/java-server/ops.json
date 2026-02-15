@@ -1,0 +1,26 @@
+[
+  {
+    "uuid": "00000000-0000-0000-0000-000000000004",
+    "name": "Ahaan",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "00000000-0000-0000-0000-000000000001",
+    "name": "Architect",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "00000000-0000-0000-0000-000000000002",
+    "name": "Saumya",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "00000000-0000-0000-0000-000000000003",
+    "name": "Sumedha",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  }
+]

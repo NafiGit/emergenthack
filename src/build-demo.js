@@ -35,10 +35,10 @@ bot.once('spawn', async () => {
     `/fill ${x} ${y} ${z} ${x+20} ${y} ${z+20} smooth_stone_slab`,
 
     // === OUTER WALLS (stone brick, 6 tall) ===
-    `/fill ${x} ${y+1} ${z} ${x+20} ${y+6} ${z} stone_bricks`,
-    `/fill ${x} ${y+1} ${z+20} ${x+20} ${y+6} ${z+20} stone_bricks`,
-    `/fill ${x} ${y+1} ${z} ${x} ${y+6} ${z+20} stone_bricks`,
-    `/fill ${x+20} ${y+1} ${z} ${x+20} ${y+6} ${z+20} stone_bricks`,
+    `/fill ${x} ${y+1} ${z} ${x+20} ${y+6} ${z} blue_concrete`,
+    `/fill ${x} ${y+1} ${z+20} ${x+20} ${y+6} ${z+20} blue_concrete`,
+    `/fill ${x} ${y+1} ${z} ${x} ${y+6} ${z+20} blue_concrete`,
+    `/fill ${x+20} ${y+1} ${z} ${x+20} ${y+6} ${z+20} blue_concrete`,
 
     // === HOLLOW INSIDE ===
     `/fill ${x+1} ${y+1} ${z+1} ${x+19} ${y+6} ${z+19} air`,
@@ -46,21 +46,21 @@ bot.once('spawn', async () => {
     // === GATE (south wall center) ===
     `/fill ${x+9} ${y+1} ${z+20} ${x+11} ${y+4} ${z+20} air`,
 
-    // === CORNER TOWERS (cobblestone, 10 tall) ===
-    `/fill ${x} ${y+1} ${z+18} ${x+2} ${y+10} ${z+20} cobblestone`,
+    // === CORNER TOWERS (white_concrete, 10 tall) ===
+    `/fill ${x} ${y+1} ${z+18} ${x+2} ${y+10} ${z+20} white_concrete`,
     `/fill ${x+1} ${y+2} ${z+19} ${x+1} ${y+9} ${z+19} air`,
-    `/fill ${x+18} ${y+1} ${z+18} ${x+20} ${y+10} ${z+20} cobblestone`,
+    `/fill ${x+18} ${y+1} ${z+18} ${x+20} ${y+10} ${z+20} white_concrete`,
     `/fill ${x+19} ${y+2} ${z+19} ${x+19} ${y+9} ${z+19} air`,
-    `/fill ${x} ${y+1} ${z} ${x+2} ${y+10} ${z+2} cobblestone`,
+    `/fill ${x} ${y+1} ${z} ${x+2} ${y+10} ${z+2} white_concrete`,
     `/fill ${x+1} ${y+2} ${z+1} ${x+1} ${y+9} ${z+1} air`,
-    `/fill ${x+18} ${y+1} ${z} ${x+20} ${y+10} ${z+2} cobblestone`,
+    `/fill ${x+18} ${y+1} ${z} ${x+20} ${y+10} ${z+2} white_concrete`,
     `/fill ${x+19} ${y+2} ${z+1} ${x+19} ${y+9} ${z+1} air`,
 
     // === TOWER TOPS ===
-    `/fill ${x-1} ${y+11} ${z-1} ${x+3} ${y+11} ${z+3} stone_bricks`,
-    `/fill ${x+17} ${y+11} ${z-1} ${x+21} ${y+11} ${z+3} stone_bricks`,
-    `/fill ${x-1} ${y+11} ${z+17} ${x+3} ${y+11} ${z+21} stone_bricks`,
-    `/fill ${x+17} ${y+11} ${z+17} ${x+21} ${y+11} ${z+21} stone_bricks`,
+    `/fill ${x-1} ${y+11} ${z-1} ${x+3} ${y+11} ${z+3} blue_concrete`,
+    `/fill ${x+17} ${y+11} ${z-1} ${x+21} ${y+11} ${z+3} blue_concrete`,
+    `/fill ${x-1} ${y+11} ${z+17} ${x+3} ${y+11} ${z+21} blue_concrete`,
+    `/fill ${x+17} ${y+11} ${z+17} ${x+21} ${y+11} ${z+21} blue_concrete`,
 
     // === BATTLEMENTS (top of walls) ===
     `/fill ${x} ${y+7} ${z} ${x+20} ${y+7} ${z} smooth_stone_slab`,
@@ -69,9 +69,9 @@ bot.once('spawn', async () => {
     `/fill ${x+20} ${y+7} ${z} ${x+20} ${y+7} ${z+20} smooth_stone_slab`,
 
     // === CENTRAL KEEP ===
-    `/fill ${x+7} ${y+1} ${z+7} ${x+13} ${y+8} ${z+13} oak_planks`,
+    `/fill ${x+7} ${y+1} ${z+7} ${x+13} ${y+8} ${z+13} light_blue_concrete`,
     `/fill ${x+8} ${y+1} ${z+8} ${x+12} ${y+7} ${z+12} air`,
-    `/fill ${x+6} ${y+9} ${z+6} ${x+14} ${y+9} ${z+14} dark_oak_planks`,
+    `/fill ${x+6} ${y+9} ${z+6} ${x+14} ${y+9} ${z+14} blue_concrete`,
     `/fill ${x+10} ${y+1} ${z+13} ${x+10} ${y+3} ${z+13} air`,
 
     // === TORCHES ===
@@ -91,10 +91,10 @@ bot.once('spawn', async () => {
     // ======= VILLAGE AREA (east of castle) =======
 
     // === HOUSE 1 - Blacksmith ===
-    `/fill ${x+25} ${y} ${z+2} ${x+32} ${y} ${z+8} cobblestone`,
-    `/fill ${x+25} ${y+1} ${z+2} ${x+32} ${y+4} ${z+8} oak_planks`,
+    `/fill ${x+25} ${y} ${z+2} ${x+32} ${y} ${z+8} white_concrete`,
+    `/fill ${x+25} ${y+1} ${z+2} ${x+32} ${y+4} ${z+8} light_blue_concrete`,
     `/fill ${x+26} ${y+1} ${z+3} ${x+31} ${y+3} ${z+7} air`,
-    `/fill ${x+25} ${y+5} ${z+2} ${x+32} ${y+5} ${z+8} spruce_planks`,
+    `/fill ${x+25} ${y+5} ${z+2} ${x+32} ${y+5} ${z+8} white_concrete`,
     `/fill ${x+28} ${y+1} ${z+8} ${x+29} ${y+3} ${z+8} air`,
     `/setblock ${x+27} ${y+2} ${z+3} torch`,
     `/setblock ${x+30} ${y+2} ${z+3} torch`,
@@ -105,10 +105,10 @@ bot.once('spawn', async () => {
     `/setblock ${x+26} ${y+1} ${z+5} anvil`,
 
     // === HOUSE 2 - Library ===
-    `/fill ${x+25} ${y} ${z+12} ${x+32} ${y} ${z+18} cobblestone`,
-    `/fill ${x+25} ${y+1} ${z+12} ${x+32} ${y+4} ${z+18} birch_planks`,
+    `/fill ${x+25} ${y} ${z+12} ${x+32} ${y} ${z+18} white_concrete`,
+    `/fill ${x+25} ${y+1} ${z+12} ${x+32} ${y+4} ${z+18} white_concrete`,
     `/fill ${x+26} ${y+1} ${z+13} ${x+31} ${y+3} ${z+17} air`,
-    `/fill ${x+25} ${y+5} ${z+12} ${x+32} ${y+5} ${z+18} oak_planks`,
+    `/fill ${x+25} ${y+5} ${z+12} ${x+32} ${y+5} ${z+18} light_blue_concrete`,
     `/fill ${x+28} ${y+1} ${z+18} ${x+29} ${y+3} ${z+18} air`,
     `/setblock ${x+27} ${y+2} ${z+13} torch`,
     `/setblock ${x+30} ${y+2} ${z+13} torch`,
@@ -120,13 +120,13 @@ bot.once('spawn', async () => {
     `/setblock ${x+29} ${y+1} ${z+13} enchanting_table`,
 
     // === MARKET STALLS (between houses) ===
-    `/fill ${x+26} ${y} ${z+10} ${x+31} ${y} ${z+10} cobblestone`,
+    `/fill ${x+26} ${y} ${z+10} ${x+31} ${y} ${z+10} white_concrete`,
     `/fill ${x+26} ${y+1} ${z+10} ${x+26} ${y+3} ${z+10} oak_fence`,
     `/fill ${x+31} ${y+1} ${z+10} ${x+31} ${y+3} ${z+10} oak_fence`,
-    `/fill ${x+26} ${y+3} ${z+10} ${x+31} ${y+3} ${z+10} red_wool`,
+    `/fill ${x+26} ${y+3} ${z+10} ${x+31} ${y+3} ${z+10} blue_wool`,
 
     // === WELL (center of village) ===
-    `/fill ${x+35} ${y} ${z+9} ${x+38} ${y} ${z+12} cobblestone`,
+    `/fill ${x+35} ${y} ${z+9} ${x+38} ${y} ${z+12} white_concrete`,
     `/fill ${x+36} ${y} ${z+10} ${x+37} ${y} ${z+11} water`,
     `/fill ${x+35} ${y+1} ${z+9} ${x+35} ${y+3} ${z+9} oak_fence`,
     `/fill ${x+38} ${y+1} ${z+9} ${x+38} ${y+3} ${z+9} oak_fence`,
@@ -148,7 +148,7 @@ bot.once('spawn', async () => {
     `/setblock ${x+10} ${y+1} ${z+24} oak_fence_gate[facing=north,open=true]`,
 
     // === WATCHTOWER (northwest) ===
-    `/fill ${x-8} ${y} ${z-8} ${x-4} ${y+15} ${z-4} stone_bricks`,
+    `/fill ${x-8} ${y} ${z-8} ${x-4} ${y+15} ${z-4} blue_concrete`,
     `/fill ${x-7} ${y+1} ${z-7} ${x-5} ${y+14} ${z-5} air`,
     // Ladder up
     `/fill ${x-5} ${y+1} ${z-7} ${x-5} ${y+14} ${z-7} ladder[facing=east]`,
@@ -167,11 +167,11 @@ bot.once('spawn', async () => {
 
     // === STREET LAMPS ===
     `/fill ${x+22} ${y} ${z+10} ${x+22} ${y+3} ${z+10} oak_fence`,
-    `/setblock ${x+22} ${y+4} ${z+10} glowstone`,
+    `/setblock ${x+22} ${y+4} ${z+10} sea_lantern`,
     `/fill ${x+33} ${y} ${z+5} ${x+33} ${y+3} ${z+5} oak_fence`,
-    `/setblock ${x+33} ${y+4} ${z+5} glowstone`,
+    `/setblock ${x+33} ${y+4} ${z+5} sea_lantern`,
     `/fill ${x+33} ${y} ${z+15} ${x+33} ${y+3} ${z+15} oak_fence`,
-    `/setblock ${x+33} ${y+4} ${z+15} glowstone`,
+    `/setblock ${x+33} ${y+4} ${z+15} sea_lantern`,
 
     // === ANIMAL PENS ===
     `/fill ${x+40} ${y} ${z+2} ${x+48} ${y} ${z+8} grass_block`,
@@ -217,11 +217,11 @@ bot.once('spawn', async () => {
 
   // Teleport all agents to the village
   await new Promise(r => setTimeout(r, 1000));
-  bot.chat(`/tp Vulkan ${x+28} ${y+1} ${z+5}`);
+  bot.chat(`/tp Saumya ${x+28} ${y+1} ${z+5}`);
   await new Promise(r => setTimeout(r, 500));
-  bot.chat(`/tp Terra ${x+36} ${y+1} ${z+10}`);
+  bot.chat(`/tp Sumedha ${x+36} ${y+1} ${z+10}`);
   await new Promise(r => setTimeout(r, 500));
-  bot.chat(`/tp Sage ${x+10} ${y+1} ${z+10}`);
+  bot.chat(`/tp Ahaan ${x+10} ${y+1} ${z+10}`);
 
   console.log('\nAll agents teleported to the village!');
   console.log('Builder staying online. Ctrl+C to disconnect.');

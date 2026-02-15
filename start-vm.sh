@@ -1,5 +1,5 @@
 #!/bin/bash
-# Emergent Island VM Startup Script
+# Base Island VM Startup Script
 
 # Kill existing screens
 screen -ls 2>/dev/null | grep -oP '\d+\.' | xargs -r -I{} screen -S {} -X quit 2>/dev/null
@@ -23,7 +23,7 @@ PUBLIC_IP=$(curl -s ifconfig.me)
 
 echo ""
 echo "==========================================="
-echo "   EMERGENT ISLAND IS LIVE!"
+echo "   BASE ISLAND IS LIVE!"
 echo "==========================================="
 echo ""
 echo "   Web Client:  http://${PUBLIC_IP}:8080"

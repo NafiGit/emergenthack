@@ -24,8 +24,8 @@ app.use(express.static('src')); // Serve static files from src directory
 // Store bot instances
 const bots = {};
 
-// Create single bot named nafi
-const AGENT_NAME = 'nafi';
+// Create single bot named base_bot
+const AGENT_NAME = 'base_bot';
 createBot(AGENT_NAME);
 
 function createBot(name) {
@@ -550,7 +550,7 @@ app.listen(PORT, () => {
   console.log(`   POST /api/:bot/jump - Make bot jump`);
   console.log(`   POST /api/:bot/look - Look at coordinates {"x": 0, "y": 70, "z": 0}`);
   console.log(`   POST /api/:bot/stop - Stop all movement`);
-  console.log(`\n   🎮 Bot name: nafi\n`);
+  console.log(`\n   🎮 Bot name: base_bot\n`);
 });
 
 // Graceful shutdown
