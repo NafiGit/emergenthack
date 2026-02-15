@@ -12,6 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run start-minecraft-server   # Start Minecraft Java server (1.19.2) via Node.js launcher
 npm run start-ai-agents          # Start all 3 AI agents with LLM decision loop
 npm run start-api-server         # Start REST API server for manual bot control
+npm run start-web-client         # Start browser-based Minecraft client (http://localhost:9111)
+npm run start-spectator-viewer   # Info: prismarine spectator viewers auto-start with agents on ports 3002-3004
 ```
 
 There is no lint or test runner configured. Manual test scripts exist in `tests/` (run with `node tests/<file>.js`).
@@ -30,7 +32,8 @@ Node.js Agent Orchestration (src/demo.js)
         ↓
 Minecraft Java Server (port 25565, RCON 25575)
         ↓
-Prismarine Viewer (browser, ports 3002-3004)
+Web Client (browser, http://localhost:9111)        ← main client (minecraft-web-client submodule)
+Spectator Viewer (browser, ports 3002-3004)        ← per-agent prismarine-viewer (auto-starts with agents)
 ```
 
 ### Agent Decision Loop (Perceive-Think-Act)
