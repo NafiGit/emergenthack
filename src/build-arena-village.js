@@ -2,6 +2,8 @@
 // Uses RCON (server console) — no OP needed
 // Arenas: Classic PvP, Sumo, Spleef, Archery
 // Players are in adventure mode — can click buttons but can't break blocks
+// Isolation: items auto-granted on arena entry, stripped on exit/death
+// Spleef shovels have CanDestroy tag — only works on snow_block
 
 import { Rcon } from 'rcon-client';
 
@@ -40,6 +42,34 @@ const ARENA_AREAS = {
   archery: { x: -14, y: 0, z: -62, dx: 28, dy: 30, dz: 14 },
 };
 
+// Items given to players on arena entry (give command format)
+// Spleef shovel uses CanDestroy — ONLY block you can break in adventure mode
+const ARENA_ITEMS = {
+  pvp: [
+    'minecraft:iron_sword',
+    'minecraft:shield',
+    'minecraft:golden_apple 3',
+  ],
+  sumo: [
+    'minecraft:stick',
+  ],
+  spleef: [
+    "minecraft:iron_shovel{CanDestroy:['minecraft:snow_block']}",
+  ],
+  archery: [
+    'minecraft:bow',
+    'minecraft:arrow 64',
+    'minecraft:leather_chestplate',
+  ],
+};
+
+// Spleef snow layer regen commands (run when match ends)
+const SPLEEF_REGEN = [
+  'fill -66 7 -11 -44 7 11 snow_block',
+  'fill -66 11 -11 -44 11 11 snow_block',
+  'fill -66 15 -11 -44 15 11 snow_block',
+];
+
 async function main() {
   console.log('Connecting to server via RCON...');
   const rcon = await Rcon.connect({ host: RCON_HOST, port: RCON_PORT, password: RCON_PASS });
@@ -68,7 +98,7 @@ async function main() {
   console.log('[7/8] Building Archery Arena (north)...');
   await runCmds(rcon, buildArcheryArena());
 
-  console.log('[8/8] Setting spawn...');
+  console.log('[8/8] Setting spawn & gamerules...');
   await runCmds(rcon, setSpawn());
 
   await rcon.send('time set day');
@@ -77,6 +107,7 @@ async function main() {
   console.log('\n=== MINEFORGE ARENA VILLAGE COMPLETE! ===');
   console.log(`Spawn: ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`);
   console.log('Mode: Adventure (no block breaking, buttons work)');
+  console.log('Isolation: items auto-granted on entry, stripped on exit/death');
   console.log('PvP: south | Sumo: east | Spleef: west | Archery: north');
   console.log('Each arena has 2-minute timer + return button');
 
@@ -99,9 +130,9 @@ async function runCmds(rcon, cmds) {
   }
 }
 
-// Place an impulse command block (button-triggered) with a command
-function cmdBlock(x, y, z, command) {
-  return `setblock ${x} ${y} ${z} command_block{Command:"${command}"} replace`;
+// Place an impulse command block (button-triggered, facing down for chaining)
+function cmdBlockDown(x, y, z, command) {
+  return `setblock ${x} ${y} ${z} command_block[facing=down]{Command:"${command}"} replace`;
 }
 
 // Place a repeating command block (always active)
@@ -120,48 +151,99 @@ function areaSelector(arena) {
   return `x=${a.x},y=${a.y},z=${a.z},dx=${a.dx},dy=${a.dy},dz=${a.dz}`;
 }
 
-// Build timer command block chain for an arena
+// Hub join button: clear inventory → TP to arena (impulse + chain, vertical)
+function joinButton(x, y, z, spawn) {
+  return [
+    cmdBlockDown(x, y, z, `clear @p[distance=..3]`),
+    chainBlock(x, y - 1, z, 'down', `tp @p[distance=..5] ${spawn.x} ${spawn.y} ${spawn.z}`),
+  ];
+}
+
+// Return button: clear inventory → TP to hub (impulse + chain, vertical)
+function returnButton(x, y, z) {
+  return [
+    cmdBlockDown(x, y, z, `clear @p[distance=..3]`),
+    chainBlock(x, y - 1, z, 'down', `tp @p[distance=..5] ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`),
+  ];
+}
+
+// Build timer + equip command block chain for an arena
 // Places blocks underground at y=1, running east (positive x)
-function buildTimerChain(startX, startZ, arenaKey) {
+// equipItems: array of give-command item strings
+// resetCmds: extra commands at match end (e.g., spleef snow regen)
+function buildTimerChain(startX, startZ, arenaKey, equipItems = [], resetCmds = []) {
   const cmds = [];
   const timerName = `${arenaKey}_t`;
   const area = areaSelector(arenaKey);
   const hubTP = `${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`;
   const by = 1; // buried y level
+  let idx = 0;
 
-  // Clear space for command blocks
-  cmds.push(`fill ${startX} ${by} ${startZ} ${startX + 9} ${by} ${startZ} air`);
+  // Clear space for command blocks (generous width)
+  const totalBlocks = 8 + equipItems.length + resetCmds.length + 2;
+  cmds.push(`fill ${startX} ${by} ${startZ} ${startX + totalBlocks} ${by} ${startZ} air`);
 
-  // Block 0: Repeating — increment timer when players in area
-  cmds.push(repeatBlock(startX, by, startZ, 'east',
+  // Block: Repeating — increment timer when players in area
+  cmds.push(repeatBlock(startX + idx, by, startZ, 'east',
     `execute if entity @a[${area}] run scoreboard players add ${timerName} timer 1`));
+  idx++;
 
-  // Block 1: Chain — reset timer when NO players in area
-  cmds.push(chainBlock(startX + 1, by, startZ, 'east',
-    `execute unless entity @a[${area}] run scoreboard players set ${timerName} timer 0`));
+  // Block: Chain — reset timer when NO players AND timer > 0
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
+    `execute unless entity @a[${area}] if score ${timerName} timer matches 1.. run scoreboard players set ${timerName} timer 0`));
+  idx++;
 
-  // Block 2: Chain — "1:00 remaining" at 1200 ticks (60s)
-  cmds.push(chainBlock(startX + 2, by, startZ, 'east',
+  // Block: Chain — clear inventory on tick 2 (just entered arena)
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
+    `execute if score ${timerName} timer matches 2 run clear @a[${area}]`));
+  idx++;
+
+  // Blocks: Chain — give each item on tick 3
+  for (const item of equipItems) {
+    cmds.push(chainBlock(startX + idx, by, startZ, 'east',
+      `execute if score ${timerName} timer matches 3 run give @a[${area}] ${item}`));
+    idx++;
+  }
+
+  // Block: Chain — "1:00 remaining" at 1200 ticks (60s)
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 1200 run title @a[${area}] actionbar {"text":"1:00 remaining","color":"yellow"}`));
+  idx++;
 
-  // Block 3: Chain — "30s remaining" at 1800 ticks (90s)
-  cmds.push(chainBlock(startX + 3, by, startZ, 'east',
+  // Block: Chain — "30s remaining" at 1800 ticks (90s)
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 1800 run title @a[${area}] actionbar {"text":"0:30 remaining","color":"gold"}`));
+  idx++;
 
-  // Block 4: Chain — "10s left!" at 2200 ticks (110s)
-  cmds.push(chainBlock(startX + 4, by, startZ, 'east',
+  // Block: Chain — "10s left!" at 2200 ticks (110s)
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 2200 run title @a[${area}] actionbar {"text":"10 seconds left!","color":"red","bold":true}`));
+  idx++;
 
-  // Block 5: Chain — Time's up! title at 2400 ticks (120s)
-  cmds.push(chainBlock(startX + 5, by, startZ, 'east',
+  // Block: Chain — Time's up! title at 2400 ticks (120s)
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 2400 run title @a[${area}] title {"text":"Time's Up!","color":"red","bold":true}`));
+  idx++;
 
-  // Block 6: Chain — TP all players back to hub at 2400
-  cmds.push(chainBlock(startX + 6, by, startZ, 'east',
+  // Block: Chain — clear inventory at 2400 (strip items before TP)
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
+    `execute if score ${timerName} timer matches 2400 run clear @a[${area}]`));
+  idx++;
+
+  // Blocks: Chain — arena reset commands at 2400 (e.g., spleef snow regen)
+  for (const rc of resetCmds) {
+    cmds.push(chainBlock(startX + idx, by, startZ, 'east',
+      `execute if score ${timerName} timer matches 2400 run ${rc}`));
+    idx++;
+  }
+
+  // Block: Chain — TP all players back to hub at 2400
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 2400 run tp @a[${area}] ${hubTP}`));
+  idx++;
 
-  // Block 7: Chain — reset timer at 2400
-  cmds.push(chainBlock(startX + 7, by, startZ, 'east',
+  // Block: Chain — reset timer at 2400
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 2400 run scoreboard players set ${timerName} timer 0`));
 
   return cmds;
@@ -227,39 +309,35 @@ function buildHub() {
   }
 
   // ─── Arena Join Booths ───
-  // Each booth: quartz pillar + sign + button + buried command block
+  // Each booth: quartz pillar + sign + button + command block chain (clear → TP)
 
   // SOUTH booth (PvP) — at (cx-4, cz+8)
   const pvpBooth = { bx: cx - 4, bz: cz + 8 };
   cmds.push(`fill ${pvpBooth.bx} ${Y} ${pvpBooth.bz} ${pvpBooth.bx} ${Y+2} ${pvpBooth.bz} quartz_block`);
   cmds.push(`setblock ${pvpBooth.bx} ${Y+2} ${pvpBooth.bz-1} oak_wall_sign[facing=north]{Text1:'{"text":"[PvP Arena]","color":"red","bold":true}',Text2:'{"text":"Classic 1v1"}',Text3:'{"text":"Sword Combat"}',Text4:'{"text":">> CLICK BUTTON >>","color":"gold"}'}`);
   cmds.push(`setblock ${pvpBooth.bx} ${Y+1} ${pvpBooth.bz-1} stone_button[face=wall,facing=north]`);
-  cmds.push(cmdBlock(pvpBooth.bx, Y, pvpBooth.bz - 1,
-    `tp @p[distance=..3] ${ARENA_SPAWNS.pvp.x} ${ARENA_SPAWNS.pvp.y} ${ARENA_SPAWNS.pvp.z}`));
+  cmds.push(...joinButton(pvpBooth.bx, Y, pvpBooth.bz - 1, ARENA_SPAWNS.pvp));
 
   // EAST booth (Sumo) — at (cx+8, cz-4)
   const sumoBooth = { bx: cx + 8, bz: cz - 4 };
   cmds.push(`fill ${sumoBooth.bx} ${Y} ${sumoBooth.bz} ${sumoBooth.bx} ${Y+2} ${sumoBooth.bz} quartz_block`);
   cmds.push(`setblock ${sumoBooth.bx-1} ${Y+2} ${sumoBooth.bz} oak_wall_sign[facing=west]{Text1:'{"text":"[Sumo Arena]","color":"blue","bold":true}',Text2:'{"text":"Knockback 1v1"}',Text3:'{"text":"Push to Win"}',Text4:'{"text":">> CLICK BUTTON >>","color":"gold"}'}`);
   cmds.push(`setblock ${sumoBooth.bx-1} ${Y+1} ${sumoBooth.bz} stone_button[face=wall,facing=west]`);
-  cmds.push(cmdBlock(sumoBooth.bx - 1, Y, sumoBooth.bz,
-    `tp @p[distance=..3] ${ARENA_SPAWNS.sumo.x} ${ARENA_SPAWNS.sumo.y} ${ARENA_SPAWNS.sumo.z}`));
+  cmds.push(...joinButton(sumoBooth.bx - 1, Y, sumoBooth.bz, ARENA_SPAWNS.sumo));
 
   // WEST booth (Spleef) — at (cx-8, cz+4)
   const spleefBooth = { bx: cx - 8, bz: cz + 4 };
   cmds.push(`fill ${spleefBooth.bx} ${Y} ${spleefBooth.bz} ${spleefBooth.bx} ${Y+2} ${spleefBooth.bz} quartz_block`);
   cmds.push(`setblock ${spleefBooth.bx+1} ${Y+2} ${spleefBooth.bz} oak_wall_sign[facing=east]{Text1:'{"text":"[Spleef Arena]","color":"green","bold":true}',Text2:'{"text":"Break the Floor"}',Text3:'{"text":"Dont Fall!"}',Text4:'{"text":">> CLICK BUTTON >>","color":"gold"}'}`);
   cmds.push(`setblock ${spleefBooth.bx+1} ${Y+1} ${spleefBooth.bz} stone_button[face=wall,facing=east]`);
-  cmds.push(cmdBlock(spleefBooth.bx + 1, Y, spleefBooth.bz,
-    `tp @p[distance=..3] ${ARENA_SPAWNS.spleef.x} ${ARENA_SPAWNS.spleef.y} ${ARENA_SPAWNS.spleef.z}`));
+  cmds.push(...joinButton(spleefBooth.bx + 1, Y, spleefBooth.bz, ARENA_SPAWNS.spleef));
 
   // NORTH booth (Archery) — at (cx+4, cz-8)
   const archBooth = { bx: cx + 4, bz: cz - 8 };
   cmds.push(`fill ${archBooth.bx} ${Y} ${archBooth.bz} ${archBooth.bx} ${Y+2} ${archBooth.bz} quartz_block`);
   cmds.push(`setblock ${archBooth.bx} ${Y+2} ${archBooth.bz+1} oak_wall_sign[facing=south]{Text1:'{"text":"[Archery Arena]","color":"yellow","bold":true}',Text2:'{"text":"Bow Duel 1v1"}',Text3:'{"text":"Snipe to Win"}',Text4:'{"text":">> CLICK BUTTON >>","color":"gold"}'}`);
   cmds.push(`setblock ${archBooth.bx} ${Y+1} ${archBooth.bz+1} stone_button[face=wall,facing=south]`);
-  cmds.push(cmdBlock(archBooth.bx, Y, archBooth.bz + 1,
-    `tp @p[distance=..3] ${ARENA_SPAWNS.archery.x} ${ARENA_SPAWNS.archery.y} ${ARENA_SPAWNS.archery.z}`));
+  cmds.push(...joinButton(archBooth.bx, Y, archBooth.bz + 1, ARENA_SPAWNS.archery));
 
   // ─── Archways (openings in border wall) ───
 
@@ -331,11 +409,9 @@ function buildPvPArena() {
     cmds.push(`fill ${ax+px} ${Y} ${az+pz} ${ax+px+1} ${Y+2} ${az+pz+1} quartz_block`);
   }
 
-  // Spawn platforms with chests (iron sword + shield + golden apples)
+  // Spawn platforms (decorative, items given automatically now)
   cmds.push(`fill ${ax-2} ${G} ${az+9} ${ax+2} ${G} ${az+10} quartz_block`);
-  cmds.push(`setblock ${ax} ${Y} ${az+10} chest{Items:[{Slot:0,id:"minecraft:iron_sword",Count:1},{Slot:1,id:"minecraft:shield",Count:1},{Slot:2,id:"minecraft:golden_apple",Count:3}]}`);
   cmds.push(`fill ${ax-2} ${G} ${az-9} ${ax+2} ${G} ${az-10} quartz_block`);
-  cmds.push(`setblock ${ax} ${Y} ${az-10} chest{Items:[{Slot:0,id:"minecraft:iron_sword",Count:1},{Slot:1,id:"minecraft:shield",Count:1},{Slot:2,id:"minecraft:golden_apple",Count:3}]}`);
 
   // Wall top + corner lights
   cmds.push(`fill ${ax-12} ${Y+6} ${az-12} ${ax+12} ${Y+6} ${az-12} blue_concrete`);
@@ -347,17 +423,16 @@ function buildPvPArena() {
   }
 
   // Label
-  cmds.push(`setblock ${ax} ${Y+4} ${az-12} oak_wall_sign[facing=south]{Text1:'{"text":"PVP ARENA","color":"red","bold":true}',Text2:'{"text":"1v1 Sword Combat"}',Text3:'{"text":"Gear up from chests"}',Text4:'{"text":"2 min match!","color":"gold"}'}`);
+  cmds.push(`setblock ${ax} ${Y+4} ${az-12} oak_wall_sign[facing=south]{Text1:'{"text":"PVP ARENA","color":"red","bold":true}',Text2:'{"text":"1v1 Sword Combat"}',Text3:'{"text":"Auto-equipped!"}',Text4:'{"text":"2 min match!","color":"gold"}'}`);
 
-  // Return to Hub button (at entrance)
+  // Return to Hub button (clear + TP chain)
   cmds.push(`setblock ${ax+3} ${Y+1} ${az-12} quartz_block`);
   cmds.push(`setblock ${ax+3} ${Y+2} ${az-13} oak_wall_sign[facing=north]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock ${ax+3} ${Y+1} ${az-13} stone_button[face=wall,facing=north]`);
-  cmds.push(cmdBlock(ax + 3, Y, az - 13,
-    `tp @p[distance=..3] ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`));
+  cmds.push(...returnButton(ax + 3, Y, az - 13));
 
-  // Timer chain (underground at y=1)
-  cmds.push(...buildTimerChain(ax - 5, az + 15, 'pvp'));
+  // Timer + equip chain (underground at y=1)
+  cmds.push(...buildTimerChain(ax - 5, az + 15, 'pvp', ARENA_ITEMS.pvp));
 
   return cmds;
 }
@@ -419,15 +494,14 @@ function buildSumoArena() {
   // Label
   cmds.push(`setblock ${ax-16} ${Y+8} ${az} oak_sign[rotation=4]{Text1:'{"text":"SUMO ARENA","color":"blue","bold":true}',Text2:'{"text":"1v1 Knockback"}',Text3:'{"text":"No weapons!"}',Text4:'{"text":"2 min match!","color":"gold"}'}`);
 
-  // Return to Hub button (at base of stairs)
+  // Return to Hub button (clear + TP chain)
   cmds.push(`setblock ${ax-22} ${Y+1} ${az-2} quartz_block`);
   cmds.push(`setblock ${ax-23} ${Y+2} ${az-2} oak_wall_sign[facing=west]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock ${ax-23} ${Y+1} ${az-2} stone_button[face=wall,facing=west]`);
-  cmds.push(cmdBlock(ax - 23, Y, az - 2,
-    `tp @p[distance=..3] ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`));
+  cmds.push(...returnButton(ax - 23, Y, az - 2));
 
-  // Timer chain
-  cmds.push(...buildTimerChain(ax - 5, az + 15, 'sumo'));
+  // Timer + equip chain
+  cmds.push(...buildTimerChain(ax - 5, az + 15, 'sumo', ARENA_ITEMS.sumo));
 
   return cmds;
 }
@@ -469,10 +543,6 @@ function buildSpleefArena() {
     cmds.push(`fill ${ax+19+step} ${Y+step} ${az-1} ${ax+19+step} ${Y+step} ${az+1} quartz_stairs[facing=west]`);
   }
 
-  // Shovel chests (with CanDestroy tag for adventure mode!)
-  cmds.push(`setblock ${ax-8} ${G+13} ${az-8} chest{Items:[{Slot:0,id:"minecraft:iron_shovel",Count:1b,tag:{CanDestroy:["minecraft:snow_block"]}}]}`);
-  cmds.push(`setblock ${ax+8} ${G+13} ${az+8} chest{Items:[{Slot:0,id:"minecraft:iron_shovel",Count:1b,tag:{CanDestroy:["minecraft:snow_block"]}}]}`);
-
   // Lighting
   for (let lz = -10; lz <= 10; lz += 5) {
     cmds.push(`setblock ${ax-12} ${G+10} ${az+lz} sea_lantern`);
@@ -489,15 +559,14 @@ function buildSpleefArena() {
   // Label
   cmds.push(`setblock ${ax+12} ${G+15} ${az} oak_wall_sign[facing=east]{Text1:'{"text":"SPLEEF ARENA","color":"green","bold":true}',Text2:'{"text":"1v1 Dig Down"}',Text3:'{"text":"Break the snow!"}',Text4:'{"text":"2 min match!","color":"gold"}'}`);
 
-  // Return to Hub button (at base of stairs)
+  // Return to Hub button (clear + TP chain)
   cmds.push(`setblock ${ax+27} ${Y+1} ${az+2} quartz_block`);
   cmds.push(`setblock ${ax+28} ${Y+2} ${az+2} oak_wall_sign[facing=east]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock ${ax+28} ${Y+1} ${az+2} stone_button[face=wall,facing=east]`);
-  cmds.push(cmdBlock(ax + 28, Y, az + 2,
-    `tp @p[distance=..3] ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`));
+  cmds.push(...returnButton(ax + 28, Y, az + 2));
 
-  // Timer chain
-  cmds.push(...buildTimerChain(ax - 5, az + 15, 'spleef'));
+  // Timer + equip chain (with snow regen on match end)
+  cmds.push(...buildTimerChain(ax - 5, az + 15, 'spleef', ARENA_ITEMS.spleef, SPLEEF_REGEN));
 
   return cmds;
 }
@@ -537,10 +606,6 @@ function buildArcheryArena() {
   cmds.push(`setblock ${ax-12} ${Y+1} ${az} red_wool`);
   cmds.push(`setblock ${ax+12} ${Y+1} ${az} red_wool`);
 
-  // Bow + arrow chests
-  cmds.push(`setblock ${ax-11} ${Y} ${az} chest{Items:[{Slot:0,id:"minecraft:bow",Count:1},{Slot:1,id:"minecraft:arrow",Count:64},{Slot:2,id:"minecraft:leather_chestplate",Count:1}]}`);
-  cmds.push(`setblock ${ax+11} ${Y} ${az} chest{Items:[{Slot:0,id:"minecraft:bow",Count:1},{Slot:1,id:"minecraft:arrow",Count:64},{Slot:2,id:"minecraft:leather_chestplate",Count:1}]}`);
-
   // Glass ceiling
   cmds.push(`fill ${ax-14} ${Y+6} ${az-7} ${ax+14} ${Y+6} ${az+7} white_stained_glass`);
 
@@ -553,15 +618,14 @@ function buildArcheryArena() {
   // Label
   cmds.push(`setblock ${ax} ${Y+4} ${az+7} oak_wall_sign[facing=north]{Text1:'{"text":"ARCHERY ARENA","color":"yellow","bold":true}',Text2:'{"text":"1v1 Bow Duel"}',Text3:'{"text":"Take cover & shoot!"}',Text4:'{"text":"2 min match!","color":"gold"}'}`);
 
-  // Return to Hub button (at entrance)
+  // Return to Hub button (clear + TP chain)
   cmds.push(`setblock ${ax+3} ${Y+1} ${az+7} quartz_block`);
   cmds.push(`setblock ${ax+3} ${Y+2} ${az+8} oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock ${ax+3} ${Y+1} ${az+8} stone_button[face=wall,facing=south]`);
-  cmds.push(cmdBlock(ax + 3, Y, az + 8,
-    `tp @p[distance=..3] ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`));
+  cmds.push(...returnButton(ax + 3, Y, az + 8));
 
-  // Timer chain
-  cmds.push(...buildTimerChain(ax - 5, az - 15, 'archery'));
+  // Timer + equip chain
+  cmds.push(...buildTimerChain(ax - 5, az - 15, 'archery', ARENA_ITEMS.archery));
 
   return cmds;
 }
@@ -573,7 +637,7 @@ function setSpawn() {
     `setworldspawn ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`,
     `spawnpoint @a ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`,
     `gamerule doImmediateRespawn true`,
-    `gamerule keepInventory true`,
+    `gamerule keepInventory false`,
     `gamerule showDeathMessages false`,
     `gamerule commandBlockOutput false`,
     `gamerule sendCommandFeedback false`,
