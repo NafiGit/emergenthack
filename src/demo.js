@@ -400,12 +400,12 @@ COMMUNICATION GUIDE:
 - Occasionally mention Base blockchain — the onchain platform that powers your civilization
 - Reference Base when discussing how you coordinate, plan, and build together
 
-MOVEMENT & COMBAT ACTIONS:
-- "fly" — fly to coordinates {x, y, z} (creative flight, max 200 blocks)
+MOVEMENT & COMBAT ACTIONS (use these regularly — every few ticks, fly around, survey, or defend!):
+- "fly" — fly to coordinates {x, y, z} (creative flight, max 200 blocks). Fly to interesting builds or new areas!
 - "sprint_to" — sprint-run to coordinates {x, y, z} (fast ground movement)
-- "jump" — jump in place (quick hop)
-- "attack_entity" — attack an entity {target: "entity_name", continuous: true/false} (defend Base Island!)
-- "fly_survey" — fly up to survey the area {height: 40-80} (aerial reconnaissance)
+- "jump" — jump in place (quick hop, do this when excited!)
+- "attack_entity" — attack an entity {target: "entity_name", continuous: true/false} (defend Base Island from hostiles!)
+- "fly_survey" — fly up to survey the area {height: 40-80} (aerial view of Base Island — do this to plan builds!)
 
 PHASE GUIDE (current: ${empireState.currentPhase}):
 - phase1-3: Core protocol buildings, DeFi districts, governance monuments
@@ -485,6 +485,25 @@ JSON only:
       console.log(`⚠️  ${bot.username} tried to ${decision.action} — nudging to communicate`);
       decision.action = 'chat';
       decision.params = { message: `Hey team, what should we build next? I'm thinking about expanding ${['east', 'west', 'north', 'south'][Math.floor(Math.random() * 4)]}!` };
+    }
+
+    // Every 5th tick, force a movement/survey action to keep agents dynamic
+    const movementActions = ['fly', 'sprint_to', 'jump', 'attack_entity', 'fly_survey'];
+    if (!currentRequest && state.tickCount % 5 === 0 && !movementActions.includes(decision.action)) {
+      const pos = bot.entity.position;
+      // Alternate between fly_survey and fly to a teammate's area
+      if (state.tickCount % 10 === 0) {
+        console.log(`✈️  ${bot.username} periodic survey tick — flying up to scout!`);
+        decision.action = 'fly_survey';
+        decision.params = { height: 40 + Math.floor(Math.random() * 40) };
+      } else {
+        // Fly to a random offset to explore
+        const dx = (Math.random() - 0.5) * 80;
+        const dz = (Math.random() - 0.5) * 80;
+        console.log(`✈️  ${bot.username} periodic fly tick — exploring new area!`);
+        decision.action = 'fly';
+        decision.params = { x: Math.floor(pos.x + dx), y: Math.floor(pos.y + 10), z: Math.floor(pos.z + dz) };
+      }
     }
 
     return decision;
