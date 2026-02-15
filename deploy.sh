@@ -36,13 +36,14 @@ else
     cd emergenthack
 fi
 
-# Create .env file
+# Create .env file from local .env (no hardcoded secrets)
 echo "[5/8] Configuring environment..."
-cat > .env << 'ENVEOF'
-AZURE_OPENAI_ENDPOINT=https://eastus2.api.cognitive.microsoft.com
-AZURE_OPENAI_API_KEY=579e293d41c54ff795d959d76a81353b
-AZURE_OPENAI_DEPLOYMENT=gpt-5-2-chat
-ENVEOF
+if [ -f /home/azureuser/emergenthack/.env ]; then
+    echo "   .env already exists, skipping"
+else
+    echo "   WARNING: No .env file found. Copy your .env file to the server manually."
+    echo "   Required vars: AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT"
+fi
 
 # Install Node dependencies
 echo "[6/8] Installing Node.js dependencies..."
