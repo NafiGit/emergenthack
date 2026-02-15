@@ -109,10 +109,10 @@ Copy `.env.example` to `.env` and configure at least one LLM provider.
 
 Minecraft 1.16.2 on superflat world. Key settings in `server/java-server/server.properties`:
 
-- `difficulty=normal`, `pvp=true`, `gamemode=survival`, `force-gamemode=true`
+- `difficulty=normal`, `pvp=true`, `gamemode=adventure`, `force-gamemode=true`
 - `allow-flight=true` (required — web client triggers fly detection without it, causing timeout kicks)
 - `spawn-monsters=false`, `spawn-animals=false`, `spawn-npcs=false` (no mobs)
 - `online-mode=false`, `enable-command-block=true`, `spawn-protection=0`
 - `view-distance=10`, `level-type=flat`, `generate-structures=false`
 
-World spawn is set to `0, 12, 0` (arena village hub). AI agents build around (500, 500). Base-themed blocks: `blue_concrete`, `white_concrete`, `light_blue_concrete`, `quartz_block`, `sea_lantern`, `prismarine`, `lapis_block`, `packed_ice`. Ground level on superflat: y=3.
+World spawn is set to `0, 4, -8` (MineForge hub, solid ground). Adventure mode prevents block breaking; buttons + command blocks handle arena teleportation. Each arena has a 2-minute timer (repeating command blocks underground at y=1) and a "Return to Hub" button. AI agents build around (500, 500). Base-themed blocks: `blue_concrete`, `white_concrete`, `light_blue_concrete`, `quartz_block`, `sea_lantern`, `prismarine`, `lapis_block`, `packed_ice`. Ground level on superflat: y=3.
