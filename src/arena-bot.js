@@ -39,6 +39,7 @@ const botInstances = {};  // name → mineflayer bot
 const botStats = {};      // name → { attacks, blocks_dug, arrows_shot, deaths, tickCount, staleTicks, active }
 const isEating = {};      // name → boolean (prevents golden apple spam)
 const isReturning = {};   // name → boolean (prevents double match-end triggers)
+const isReconnecting = {}; // name → boolean (prevents duplicate reconnect loops)
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function ts() { return new Date().toISOString().slice(11, 19); }
@@ -471,6 +472,11 @@ function createArenaBot(def) {
     // Award win to opponent
     try { rcon.send(`scoreboard players add ${opponent} wins 1`); } catch {}
 
+    // Kill dropped items nearby to reduce entity spam
+    try { rcon.send('kill @e[type=item]'); } catch {}
+    try { rcon.send('kill @e[type=arrow]'); } catch {}
+    try { rcon.send('kill @e[type=experience_orb]'); } catch {}
+
     setTimeout(async () => {
       try {
         bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
@@ -501,20 +507,30 @@ function createArenaBot(def) {
   bot.on('kicked', (reason) => {
     log(name, `KICKED: ${JSON.stringify(reason)}`);
     cleanup();
-    setTimeout(() => createArenaBot(def), 5000);
+    reconnect();
   });
 
   bot.on('end', () => {
-    log(name, 'DISCONNECTED — reconnecting in 5s...');
+    log(name, 'DISCONNECTED');
     cleanup();
-    setTimeout(() => createArenaBot(def), 5000);
+    reconnect();
   });
 
   function cleanup() {
-    if (combatInterval) clearInterval(combatInterval);
-    if (healthCheckInterval) clearInterval(healthCheckInterval);
+    if (combatInterval) { clearInterval(combatInterval); combatInterval = null; }
+    if (healthCheckInterval) { clearInterval(healthCheckInterval); healthCheckInterval = null; }
     botStats[name].active = false;
     delete botInstances[name];
+  }
+
+  function reconnect() {
+    if (isReconnecting[name]) return; // prevent duplicate reconnect
+    isReconnecting[name] = true;
+    log(name, 'Reconnecting in 5s...');
+    setTimeout(() => {
+      isReconnecting[name] = false;
+      createArenaBot(def);
+    }, 5000);
   }
 
   return bot;
@@ -530,6 +546,14 @@ async function main() {
 
   rcon = await Rcon.connect(RCON_CFG);
   console.log('RCON connected\n');
+
+  // Keep inventory on death (prevents item drops / entity spam)
+  await rcon.send('gamerule keepInventory true');
+  // Kill existing entities
+  await rcon.send('kill @e[type=item]');
+  await rcon.send('kill @e[type=arrow]');
+  await rcon.send('kill @e[type=experience_orb]');
+  console.log('keepInventory enabled, entities cleaned\n');
 
   // Regenerate spleef snow layers
   await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
