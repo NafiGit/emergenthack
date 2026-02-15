@@ -1,174 +1,146 @@
-// MineForge Arena Bot — AI competitor for 1v1 arena matches
-// Detects players entering arenas, teleports to join, fights with arena-specific AI
-// State machine: IDLE → ENTERING → FIGHTING → IDLE
+// MineForge Arena — 8 Independent AI Bots (2 per arena) that fight each other
+// Each bot is its own mineflayer connection with arena-specific combat AI
+// Bots find opponents via cross-referenced bot.entity (mineflayer offline mode
+// doesn't populate entity.type/username for other players)
 
 import mineflayer from 'mineflayer';
 import pkg from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pkg;
 import minecraftData from 'minecraft-data';
+import { Rcon } from 'rcon-client';
 
-const BOT_NAME = 'ArenaBot';
+const RCON_CFG = { host: 'localhost', port: 25575, password: 'minecraft123' };
 
-const HUB_SPAWN = { x: 0, y: 4, z: -8 };
+// ─── Bot pair definitions ──────────────────────────────────
 
-const ARENA_SPAWNS = {
-  pvp:     { x: 0,   y: 4,   z: 44 },
-  sumo:    { x: 44,  y: 11,  z: 0 },
-  spleef:  { x: -43, y: 16,  z: 0 },
-  archery: { x: 0,   y: 4,   z: -44 },
-};
-
-const ARENA_BOUNDS = {
-  pvp:     { x1: -12, x2: 12,  z1: 43, z2: 67 },
-  sumo:    { x1: 43,  x2: 67,  z1: -12, z2: 12 },
-  spleef:  { x1: -67, x2: -43, z1: -12, z2: 12 },
-  archery: { x1: -14, x2: 14,  z1: -62, z2: -48 },
-};
+const BOT_DEFS = [
+  { name: 'Pvp1',    arena: 'pvp',     spawn: { x: 5, y: 4, z: 50 },    opponent: 'Pvp2' },
+  { name: 'Pvp2',    arena: 'pvp',     spawn: { x: -5, y: 4, z: 60 },   opponent: 'Pvp1' },
+  { name: 'Sumo1',   arena: 'sumo',    spawn: { x: 50, y: 11, z: 5 },   opponent: 'Sumo2' },
+  { name: 'Sumo2',   arena: 'sumo',    spawn: { x: 60, y: 11, z: -5 },  opponent: 'Sumo1' },
+  { name: 'Spleef1', arena: 'spleef',  spawn: { x: -50, y: 16, z: 5 },  opponent: 'Spleef2' },
+  { name: 'Spleef2', arena: 'spleef',  spawn: { x: -60, y: 16, z: -5 }, opponent: 'Spleef1' },
+  { name: 'Archer1', arena: 'archery', spawn: { x: 5, y: 4, z: -52 },   opponent: 'Archer2' },
+  { name: 'Archer2', arena: 'archery', spawn: { x: -5, y: 4, z: -58 },  opponent: 'Archer1' },
+];
 
 const SUMO_CENTER = { x: 55, y: 11, z: 0 };
+const SUMO_PLATFORM_RADIUS = 10;
+const SUMO_FALL_Y = 5; // below this = fell off
 
-const SCAN_INTERVAL = 1000;
-const COMBAT_INTERVAL = 250;
+const ARCHERY_BOUNDS = { x1: -12, x2: 12, z1: -60, z2: -50 };
 
-// ─── State ────────────────────────────────────────────────
+const HUB_POS = { x: 0, y: 4, z: -8 };
 
-let currentState = 'idle';
-let currentArena = null;
-let combatLoopId = null;
-let scanLoopId = null;
-let lastBowShot = 0;
+// ─── Shared state ──────────────────────────────────────────
+
+let rcon = null;
+const botInstances = {};  // name → mineflayer bot
+const botStats = {};      // name → { attacks, blocks_dug, arrows_shot, deaths, tickCount, staleTicks, active }
+const isEating = {};      // name → boolean (prevents golden apple spam)
+const isReturning = {};   // name → boolean (prevents double match-end triggers)
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function ts() { return new Date().toISOString().slice(11, 19); }
+function log(name, msg) { console.log(`[${ts()}] [${name}] ${msg}`); }
 
-// ─── Arena detection ──────────────────────────────────────
+// ─── Get opponent entity from cross-referenced bot ─────────
 
-function getArenaAt(x, y, z) {
-  for (const [name, b] of Object.entries(ARENA_BOUNDS)) {
-    if (x >= b.x1 && x <= b.x2 && z >= b.z1 && z <= b.z2 && y >= 0 && y <= 30) {
-      return name;
+function getOpponentEntity(myName, opponentName) {
+  const myBot = botInstances[myName];
+  const oppBot = botInstances[opponentName];
+  if (!myBot?.entity || !oppBot?.entity) return null;
+
+  const oppPos = oppBot.entity.position;
+
+  // Find the matching entity in MY entity list by position proximity
+  let best = null;
+  let bestDist = Infinity;
+  for (const entity of Object.values(myBot.entities)) {
+    if (entity === myBot.entity) continue;
+    if (!entity.position) continue;
+    const d = entity.position.distanceTo(oppPos);
+    if (d < bestDist) {
+      bestDist = d;
+      best = entity;
     }
   }
-  return null;
+
+  // Within 3 blocks = same entity (position updates may lag slightly)
+  if (best && bestDist < 3) return best;
+
+  // Fallback: return opponent's entity ref directly (lookAt/position works, attack may fail)
+  return oppBot.entity;
 }
 
-function findNearestPlayer(bot) {
-  return bot.nearestEntity(e =>
-    e.type === 'player' && e.username !== bot.username
-  );
-}
+// ─── Item giving via RCON ──────────────────────────────────
 
-function isInArena(bot, arenaName) {
-  const pos = bot.entity.position;
-  return getArenaAt(pos.x, pos.y, pos.z) === arenaName;
-}
-
-// ─── Scanner loop ─────────────────────────────────────────
-
-function scanForPlayers(bot) {
-  if (currentState !== 'idle') return;
-
-  for (const player of Object.values(bot.players)) {
-    if (player.username === bot.username || !player.entity) continue;
-    const pos = player.entity.position;
-    const arena = getArenaAt(pos.x, pos.y, pos.z);
-    if (arena) {
-      console.log(`[ArenaBot] ${player.username} detected in ${arena} arena — joining!`);
-      enterArena(bot, arena);
-      return;
-    }
-  }
-}
-
-// ─── Arena entry ──────────────────────────────────────────
-
-async function enterArena(bot, arenaName) {
-  currentState = 'entering';
-  currentArena = arenaName;
-
-  const spawn = ARENA_SPAWNS[arenaName];
-  console.log(`[ArenaBot] Teleporting to ${arenaName} (${spawn.x}, ${spawn.y}, ${spawn.z})`);
-
-  bot.chat(`/clear @s`);
-  await sleep(200);
-  bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
-
-  // Wait for command blocks to auto-equip items (tick 3 = ~150ms after arrival)
-  await sleep(3000);
-
-  await equipForArena(bot, arenaName);
-
-  console.log(`[ArenaBot] Fighting in ${arenaName}!`);
-  currentState = 'fighting';
-  startCombatLoop(bot, arenaName);
-}
-
-async function equipForArena(bot, arenaName) {
-  const items = bot.inventory.items();
-
-  switch (arenaName) {
-    case 'pvp': {
-      const sword = items.find(i => i.name === 'iron_sword');
-      if (sword) await bot.equip(sword, 'hand');
-      const shield = items.find(i => i.name === 'shield');
-      if (shield) await bot.equip(shield, 'off-hand');
-      break;
-    }
-    case 'sumo': {
-      const stick = items.find(i => i.name === 'stick');
-      if (stick) await bot.equip(stick, 'hand');
-      break;
-    }
-    case 'spleef': {
-      const shovel = items.find(i => i.name === 'iron_shovel');
-      if (shovel) await bot.equip(shovel, 'hand');
-      break;
-    }
-    case 'archery': {
-      const bow = items.find(i => i.name === 'bow');
-      if (bow) await bot.equip(bow, 'hand');
-      break;
-    }
+async function giveItems(name, arena) {
+  const items = {
+    pvp: [
+      `give ${name} minecraft:iron_sword`,
+      `give ${name} minecraft:shield`,
+      `give ${name} minecraft:golden_apple 3`,
+    ],
+    sumo: [
+      `give ${name} minecraft:stick`,
+    ],
+    spleef: [
+      `give ${name} minecraft:iron_shovel{CanDestroy:["minecraft:snow_block"]}`,
+    ],
+    archery: [
+      `give ${name} minecraft:bow`,
+      `give ${name} minecraft:arrow 64`,
+      `give ${name} minecraft:leather_chestplate`,
+    ],
+  };
+  for (const cmd of items[arena] || []) {
+    try { await rcon.send(cmd); } catch {}
   }
 }
 
-// ─── Combat loop ──────────────────────────────────────────
-
-function startCombatLoop(bot, arenaName) {
-  stopCombatLoop();
-  const strategies = { pvp: pvpTick, sumo: sumoTick, spleef: spleefTick, archery: archeryTick };
-  const fn = strategies[arenaName];
-  if (fn) combatLoopId = setInterval(() => fn(bot), COMBAT_INTERVAL);
+async function equipForArena(bot, name, arena) {
+  const inv = bot.inventory.items();
+  try {
+    switch (arena) {
+      case 'pvp': {
+        const sword = inv.find(i => i.name === 'iron_sword');
+        if (sword) await bot.equip(sword, 'hand');
+        const shield = inv.find(i => i.name === 'shield');
+        if (shield) await bot.equip(shield, 'off-hand');
+        break;
+      }
+      case 'sumo': {
+        const stick = inv.find(i => i.name === 'stick');
+        if (stick) await bot.equip(stick, 'hand');
+        break;
+      }
+      case 'spleef': {
+        const shovel = inv.find(i => i.name === 'iron_shovel');
+        if (shovel) await bot.equip(shovel, 'hand');
+        break;
+      }
+      case 'archery': {
+        const bow = inv.find(i => i.name === 'bow');
+        if (bow) await bot.equip(bow, 'hand');
+        const chest = inv.find(i => i.name === 'leather_chestplate');
+        if (chest) await bot.equip(chest, 'torso');
+        break;
+      }
+    }
+  } catch (e) { log(name, `Equip error: ${e.message}`); }
 }
 
-function stopCombatLoop() {
-  if (combatLoopId) { clearInterval(combatLoopId); combatLoopId = null; }
-}
+// ─── Combat AI ─────────────────────────────────────────────
 
-function returnToIdle(bot) {
-  stopCombatLoop();
-  bot.pathfinder.setGoal(null);
-  bot.clearControlStates();
-  currentState = 'idle';
-  currentArena = null;
-}
-
-// ─── PvP AI ───────────────────────────────────────────────
-
-async function pvpTick(bot) {
-  if (currentState !== 'fighting') return;
-
-  const target = findNearestPlayer(bot);
-  if (!target) {
-    if (!isInArena(bot, 'pvp')) returnToIdle(bot);
-    return;
-  }
-
+async function pvpTick(bot, name, target) {
   const dist = bot.entity.position.distanceTo(target.position);
 
-  // Heal with golden apple when low
-  if (bot.health < 10) {
+  // Eat golden apple when low HP (with lock to prevent spam)
+  if (bot.health < 10 && !isEating[name]) {
     const apple = bot.inventory.items().find(i => i.name === 'golden_apple');
     if (apple) {
+      isEating[name] = true;
       try {
         await bot.equip(apple, 'hand');
         bot.activateItem();
@@ -176,153 +148,138 @@ async function pvpTick(bot) {
         bot.deactivateItem();
         const sword = bot.inventory.items().find(i => i.name === 'iron_sword');
         if (sword) await bot.equip(sword, 'hand');
+        log(name, 'Ate golden apple!');
       } catch {}
+      isEating[name] = false;
       return;
     }
   }
 
   if (dist > 3.5) {
-    // Chase
-    try {
-      const mcData = minecraftData(bot.version);
-      const movements = new Movements(bot, mcData);
-      bot.pathfinder.setMovements(movements);
-      bot.pathfinder.setGoal(new goals.GoalFollow(target, 2), true);
-    } catch {}
+    try { await bot.lookAt(target.position.offset(0, 1.6, 0)); } catch {}
+    bot.setControlState('forward', true);
+    bot.setControlState('sprint', dist > 5);
   } else {
-    // Melee attack
+    bot.setControlState('forward', false);
+    bot.setControlState('sprint', false);
     try {
-      bot.pathfinder.setGoal(null);
       await bot.lookAt(target.position.offset(0, 1.6, 0));
       bot.attack(target);
+      botStats[name].attacks++;
 
-      // Random strafe
+      // Strafe
       const dir = Math.random() > 0.5 ? 'left' : 'right';
       bot.setControlState(dir, true);
       setTimeout(() => bot.setControlState(dir, false), 200);
 
-      // Sprint-jump crit (30% chance)
+      // Sprint-jump crit (30%)
       if (Math.random() < 0.3) {
         bot.setControlState('sprint', true);
         bot.setControlState('jump', true);
-        setTimeout(() => {
-          bot.setControlState('sprint', false);
-          bot.setControlState('jump', false);
-        }, 300);
+        setTimeout(() => { bot.setControlState('sprint', false); bot.setControlState('jump', false); }, 300);
       }
-    } catch {}
+    } catch (e) { log(name, `Attack err: ${e.message}`); }
   }
 }
 
-// ─── Sumo AI ──────────────────────────────────────────────
-
-async function sumoTick(bot) {
-  if (currentState !== 'fighting') return;
-
-  const target = findNearestPlayer(bot);
-  if (!target) {
-    if (!isInArena(bot, 'sumo')) returnToIdle(bot);
-    return;
-  }
-
+async function sumoTick(bot, name, target) {
   const dist = bot.entity.position.distanceTo(target.position);
+  const pos = bot.entity.position;
 
-  // Self-preservation: stay near center
-  const distToCenter = Math.sqrt(
-    (bot.entity.position.x - SUMO_CENTER.x) ** 2 +
-    (bot.entity.position.z - SUMO_CENTER.z) ** 2
-  );
-
-  if (distToCenter > 5 && dist > 3) {
-    // Retreat to center first
-    try {
-      const mcData = minecraftData(bot.version);
-      const movements = new Movements(bot, mcData);
-      bot.pathfinder.setMovements(movements);
-      bot.pathfinder.setGoal(new goals.GoalNear(SUMO_CENTER.x, SUMO_CENTER.y, SUMO_CENTER.z, 2));
-    } catch {}
+  // Fall detection — re-TP if fell off platform
+  if (pos.y < SUMO_FALL_Y) {
+    log(name, `FELL OFF PLATFORM! (y=${pos.y.toFixed(1)}) Re-teleporting...`);
+    const def = BOT_DEFS.find(d => d.name === name);
+    bot.chat(`/tp @s ${def.spawn.x} ${def.spawn.y} ${def.spawn.z}`);
     return;
   }
 
-  try {
-    await bot.lookAt(target.position.offset(0, 1.6, 0));
-  } catch {}
+  try { await bot.lookAt(target.position.offset(0, 1.6, 0)); } catch {}
 
-  if (dist > 3) {
-    // Sprint toward
-    bot.setControlState('sprint', true);
+  // Edge detection — retreat to center if near edge
+  const distToCenter = Math.sqrt((pos.x - SUMO_CENTER.x) ** 2 + (pos.z - SUMO_CENTER.z) ** 2);
+  if (distToCenter > SUMO_PLATFORM_RADIUS - 2 && dist > 2) {
+    try {
+      await bot.lookAt({ x: SUMO_CENTER.x, y: SUMO_CENTER.y + 1.6, z: SUMO_CENTER.z });
+    } catch {}
     bot.setControlState('forward', true);
-  } else {
-    // Sprint-hit for max knockback
     bot.setControlState('sprint', true);
-    bot.setControlState('forward', true);
-    try { bot.attack(target); } catch {}
-    setTimeout(() => {
-      bot.setControlState('sprint', false);
-      bot.setControlState('forward', false);
-    }, 200);
+    setTimeout(() => { bot.setControlState('forward', false); bot.setControlState('sprint', false); }, 400);
+    return;
+  }
+
+  // Sprint toward and attack
+  bot.setControlState('sprint', true);
+  bot.setControlState('forward', true);
+
+  if (dist <= 3.5) {
+    try {
+      bot.attack(target);
+      botStats[name].attacks++;
+    } catch {}
+    setTimeout(() => { bot.setControlState('sprint', false); bot.setControlState('forward', false); }, 200);
   }
 }
 
-// ─── Spleef AI ────────────────────────────────────────────
-
-async function spleefTick(bot) {
-  if (currentState !== 'fighting') return;
-
-  const target = findNearestPlayer(bot);
-  if (!target) {
-    if (!isInArena(bot, 'spleef')) returnToIdle(bot);
-    return;
-  }
-
-  // Make sure shovel is equipped
+async function spleefTick(bot, name, target) {
+  // Ensure shovel equipped
   const shovel = bot.inventory.items().find(i => i.name === 'iron_shovel');
   if (shovel && bot.heldItem?.name !== 'iron_shovel') {
     try { await bot.equip(shovel, 'hand'); } catch {}
   }
 
-  const targetPos = target.position;
-  const dist = bot.entity.position.distanceTo(targetPos);
+  const dist = bot.entity.position.distanceTo(target.position);
+  try { await bot.lookAt(target.position); } catch {}
 
-  if (dist > 5) {
-    // Move closer to target
-    try {
-      const mcData = minecraftData(bot.version);
-      const movements = new Movements(bot, mcData);
-      bot.pathfinder.setMovements(movements);
-      bot.pathfinder.setGoal(new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 3), true);
-    } catch {}
+  if (dist > 4) {
+    bot.setControlState('forward', true);
+    bot.setControlState('sprint', dist > 7);
     return;
   }
 
-  // Dig snow blocks under/near the target
-  bot.pathfinder.setGoal(null);
-  for (let dy = 0; dy >= -2; dy--) {
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) {
+  bot.setControlState('forward', false);
+  bot.setControlState('sprint', false);
+
+  // Dig snow under/near opponent — search wider area
+  const tp = target.position;
+  for (let dy = 0; dy >= -3; dy--) {
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
         try {
-          const block = bot.blockAt(targetPos.offset(dx, dy, dz));
+          const block = bot.blockAt(tp.offset(dx, dy, dz));
           if (block && block.name === 'snow_block') {
             await bot.dig(block, true);
-            return; // One block per tick
+            botStats[name].blocks_dug++;
+            return;
           }
         } catch {}
       }
     }
   }
-}
 
-// ─── Archery AI ───────────────────────────────────────────
-
-async function archeryTick(bot) {
-  if (currentState !== 'fighting') return;
-
-  const target = findNearestPlayer(bot);
-  if (!target) {
-    if (!isInArena(bot, 'archery')) returnToIdle(bot);
-    return;
+  // No snow near opponent — dig snow under self to create holes
+  const sp = bot.entity.position;
+  for (let dy = 0; dy >= -2; dy--) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        try {
+          const block = bot.blockAt(sp.offset(dx, dy, dz));
+          if (block && block.name === 'snow_block') {
+            await bot.dig(block, true);
+            botStats[name].blocks_dug++;
+            return;
+          }
+        } catch {}
+      }
+    }
   }
 
+  // Move toward opponent if no snow anywhere
+  bot.setControlState('forward', true);
+}
+
+const lastBowShot = {};
+async function archeryTick(bot, name, target) {
   // Equip bow
   const bow = bot.inventory.items().find(i => i.name === 'bow');
   if (bow && bot.heldItem?.name !== 'bow') {
@@ -332,128 +289,314 @@ async function archeryTick(bot) {
   const dist = bot.entity.position.distanceTo(target.position);
   const now = Date.now();
 
-  // Aim (height offset for arrow arc)
+  // Gravity compensation
   const yOffset = 1.6 + (dist * 0.04);
-  try {
-    await bot.lookAt(target.position.offset(0, yOffset, 0));
-  } catch {}
+  try { await bot.lookAt(target.position.offset(0, yOffset, 0)); } catch {}
+
+  if (!lastBowShot[name]) lastBowShot[name] = 0;
 
   // Shoot with cooldown
-  if (now - lastBowShot > 1500) {
-    bot.activateItem(); // Draw bow
+  if (now - lastBowShot[name] > 1500) {
+    bot.activateItem();
     const chargeTime = Math.min(1000, 300 + dist * 20);
-
     setTimeout(async () => {
-      try {
-        await bot.lookAt(target.position.offset(0, yOffset, 0));
-      } catch {}
-      bot.deactivateItem(); // Release
-      lastBowShot = Date.now();
+      try { await bot.lookAt(target.position.offset(0, yOffset, 0)); } catch {}
+      bot.deactivateItem();
+      lastBowShot[name] = Date.now();
+      botStats[name].arrows_shot++;
     }, chargeTime);
   }
 
-  // Strafe between shots
-  if (now - lastBowShot > 800 && now - lastBowShot < 1200) {
+  // MOVING TARGET — constant strafing between shots
+  if (Math.random() < 0.4) {
     const dir = Math.random() > 0.5 ? 'left' : 'right';
     bot.setControlState(dir, true);
-    setTimeout(() => bot.setControlState(dir, false), 300);
+    setTimeout(() => bot.setControlState(dir, false), 400);
+  }
+  if (Math.random() < 0.15) {
+    bot.setControlState('forward', true);
+    setTimeout(() => bot.setControlState('forward', false), 300);
+  }
+  if (Math.random() < 0.15) {
+    bot.setControlState('back', true);
+    setTimeout(() => bot.setControlState('back', false), 300);
+  }
+
+  // Stay in bounds — if drifting out, walk back toward center
+  const pos = bot.entity.position;
+  if (pos.x < ARCHERY_BOUNDS.x1 + 2 || pos.x > ARCHERY_BOUNDS.x2 - 2 ||
+      pos.z < ARCHERY_BOUNDS.z1 + 2 || pos.z > ARCHERY_BOUNDS.z2 - 2) {
+    try { await bot.lookAt({ x: 0, y: 4 + 1.6, z: -55 }); } catch {}
+    bot.setControlState('forward', true);
+    setTimeout(() => bot.setControlState('forward', false), 500);
   }
 }
 
-// ─── Bot creation ─────────────────────────────────────────
+const combatFns = { pvp: pvpTick, sumo: sumoTick, spleef: spleefTick, archery: archeryTick };
 
-function createArenaBot() {
-  console.log('[ArenaBot] Connecting to server...');
+// ─── Return to arena after match end ───────────────────────
+
+async function returnToArena(bot, name, arena, spawn, stats) {
+  if (isReturning[name]) return; // prevent double triggers
+  isReturning[name] = true;
+  stats.active = false;
+  log(name, '[MATCH-END] Returning to arena in 5s...');
+
+  await sleep(5000);
+  try {
+    bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
+    await sleep(2000);
+    bot.chat('/clear @s');
+    await sleep(200);
+    await giveItems(name, arena);
+    await sleep(500);
+    await equipForArena(bot, name, arena);
+    stats.active = true;
+    log(name, '[MATCH-END] Back in arena!');
+  } catch (e) {
+    log(name, `Return error: ${e.message}`);
+  }
+  isReturning[name] = false;
+}
+
+// ─── Entity cleanup (arrows, items) every 2 min ───────────
+
+async function entityCleanup() {
+  if (!rcon) return;
+  try {
+    const r1 = await rcon.send('kill @e[type=item]');
+    const r2 = await rcon.send('kill @e[type=arrow]');
+    console.log(`[CLEANUP] Items: ${r1} | Arrows: ${r2}`);
+  } catch {}
+}
+
+// ─── Create one arena bot ──────────────────────────────────
+
+function createArenaBot(def) {
+  const { name, arena, spawn, opponent } = def;
+  log(name, `Creating bot for ${arena} arena...`);
 
   const bot = mineflayer.createBot({
     host: 'localhost',
     port: 25565,
-    username: BOT_NAME,
+    username: name,
     auth: 'offline',
     version: '1.16.2',
   });
 
   bot.loadPlugin(pathfinder);
 
-  bot.once('spawn', () => {
-    console.log('[ArenaBot] Spawned! Waiting for OP...');
+  botStats[name] = {
+    arena, attacks: 0, blocks_dug: 0, arrows_shot: 0,
+    deaths: 0, tickCount: 0, staleTicks: 0, active: false,
+  };
 
-    setTimeout(() => {
-      bot.chat(`/tp @s ${HUB_SPAWN.x} ${HUB_SPAWN.y} ${HUB_SPAWN.z}`);
-      console.log('[ArenaBot] Ready at hub. Scanning for players...');
-      currentState = 'idle';
-      scanLoopId = setInterval(() => scanForPlayers(bot), SCAN_INTERVAL);
+  let combatInterval = null;
+  let healthCheckInterval = null;
+
+  bot.once('spawn', async () => {
+    log(name, 'Spawned! Waiting for OP...');
+    await sleep(2000);
+
+    try { await rcon.send(`op ${name}`); } catch {}
+
+    // Teleport to arena
+    bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
+    log(name, `Teleported to ${arena} (${spawn.x}, ${spawn.y}, ${spawn.z})`);
+    await sleep(3000);
+
+    // Give items via RCON
+    bot.chat('/clear @s');
+    await sleep(200);
+    await giveItems(name, arena);
+    await sleep(500);
+    await equipForArena(bot, name, arena);
+    log(name, `Equipped for ${arena}`);
+
+    botStats[name].active = true;
+    botInstances[name] = bot;
+
+    // Start combat loop (250ms)
+    const combatFn = combatFns[arena];
+    combatInterval = setInterval(async () => {
+      if (!botStats[name].active) return;
+      const target = getOpponentEntity(name, opponent);
+      if (!target) return;
+      botStats[name].tickCount++;
+      try { await combatFn(bot, name, target); } catch (e) {
+        log(name, `Combat error: ${e.message}`);
+      }
+    }, 250);
+
+    // Health check every 10s
+    healthCheckInterval = setInterval(() => {
+      if (!bot.entity) return;
+      const stats = botStats[name];
+      const pos = bot.entity.position;
+      const target = getOpponentEntity(name, opponent);
+      const dist = target ? bot.entity.position.distanceTo(target.position).toFixed(1) : 'N/A';
+
+      console.log(`[HEALTH-CHECK][${name}] HP:${bot.health?.toFixed(1) || '?'}/20 | ` +
+        `Pos:(${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) | ` +
+        `Opponent:${opponent} dist:${dist} | Arena:${arena} | ` +
+        `ATK:${stats.attacks} DIG:${stats.blocks_dug} ARW:${stats.arrows_shot} | ` +
+        `Deaths:${stats.deaths} | Tick:${stats.tickCount}`);
+
+      // Stale detection
+      if (!target) {
+        stats.staleTicks++;
+        console.log(`[STALE-WARNING][${name}] Cannot find ${opponent} for ${stats.staleTicks * 10}s`);
+        if (stats.staleTicks >= 3) {
+          console.log(`[STALE-RECOVERY][${name}] Re-teleporting to spawn...`);
+          bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
+          stats.staleTicks = 0;
+        }
+      } else {
+        stats.staleTicks = 0;
+      }
+
+      // Hub detection — if at hub, re-teleport to arena (with flag to prevent double)
+      if (!isReturning[name] && Math.abs(pos.x - HUB_POS.x) < 3 && Math.abs(pos.z - HUB_POS.z) < 3 && Math.abs(pos.y - HUB_POS.y) < 3) {
+        returnToArena(bot, name, arena, spawn, stats);
+      }
+    }, 10000);
+  });
+
+  // Death handler
+  bot.on('death', () => {
+    botStats[name].deaths++;
+    log(name, `[DEATH] Killed! (death #${botStats[name].deaths}) Respawning in 3s...`);
+    botStats[name].active = false;
+
+    // Award win to opponent
+    try { rcon.send(`scoreboard players add ${opponent} wins 1`); } catch {}
+
+    setTimeout(async () => {
+      try {
+        bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
+        await sleep(2000);
+        bot.chat('/clear @s');
+        await sleep(200);
+        await giveItems(name, arena);
+        await sleep(500);
+        await equipForArena(bot, name, arena);
+        botStats[name].active = true;
+        log(name, `[RESPAWN] Back in action! HP:${bot.health}`);
+      } catch (e) {
+        log(name, `Respawn error: ${e.message}`);
+      }
     }, 3000);
   });
 
-  // Death: respawn and return to hub
-  bot.on('death', () => {
-    console.log('[ArenaBot] Died!');
-    const wasArena = currentArena;
-    stopCombatLoop();
-    currentState = 'idle';
-    currentArena = null;
-
-    // Award win to opponent
-    if (wasArena) {
-      setTimeout(() => {
-        const opponent = findNearestPlayer(bot);
-        if (opponent) {
-          bot.chat(`/scoreboard players add ${opponent.username} wins 1`);
-          console.log(`[ArenaBot] Awarded win to ${opponent.username}`);
-        }
-      }, 2000);
-    }
-
-    // Return to hub after respawn
-    setTimeout(() => {
-      bot.chat(`/tp @s ${HUB_SPAWN.x} ${HUB_SPAWN.y} ${HUB_SPAWN.z}`);
-    }, 1500);
-  });
-
-  // Forced move (timer TP'd us back to hub)
+  // Forced move (timer TP'd to hub)
   bot.on('forcedMove', () => {
-    if (currentState === 'fighting') {
-      console.log('[ArenaBot] Match ended (timer). Returning to idle.');
-      returnToIdle(bot);
+    const pos = bot.entity?.position;
+    if (pos && !isReturning[name] && Math.abs(pos.x - HUB_POS.x) < 5 && Math.abs(pos.z - HUB_POS.z) < 5) {
+      returnToArena(bot, name, arena, spawn, botStats[name]);
     }
   });
 
-  // Track opponent deaths for win scoring
-  bot.on('entityDead', (entity) => {
-    if (currentState !== 'fighting' || !currentArena) return;
-    if (entity.type === 'player' && entity.username !== bot.username) {
-      console.log(`[ArenaBot] Opponent ${entity.username} eliminated!`);
-      bot.chat(`/scoreboard players add ${BOT_NAME} wins 1`);
-    }
-  });
-
-  bot.on('error', (err) => console.error('[ArenaBot] Error:', err.message));
+  bot.on('error', (err) => log(name, `ERROR: ${err.message}`));
 
   bot.on('kicked', (reason) => {
-    console.log('[ArenaBot] Kicked:', reason);
-    stopCombatLoop();
-    if (scanLoopId) clearInterval(scanLoopId);
+    log(name, `KICKED: ${JSON.stringify(reason)}`);
+    cleanup();
+    setTimeout(() => createArenaBot(def), 5000);
   });
 
   bot.on('end', () => {
-    console.log('[ArenaBot] Disconnected.');
-    stopCombatLoop();
-    if (scanLoopId) clearInterval(scanLoopId);
+    log(name, 'DISCONNECTED — reconnecting in 5s...');
+    cleanup();
+    setTimeout(() => createArenaBot(def), 5000);
   });
+
+  function cleanup() {
+    if (combatInterval) clearInterval(combatInterval);
+    if (healthCheckInterval) clearInterval(healthCheckInterval);
+    botStats[name].active = false;
+    delete botInstances[name];
+  }
 
   return bot;
 }
 
-// ─── Startup ──────────────────────────────────────────────
+// ─── Main ──────────────────────────────────────────────────
 
-console.log('[ArenaBot] Starting AI Arena Competitor...');
-const bot = createArenaBot();
+async function main() {
+  console.log('\n' + '='.repeat(70));
+  console.log('  MINEFORGE ARENA — 8 AI BOTS (2 per arena)');
+  console.log('  PvP | Sumo | Spleef | Archery');
+  console.log('='.repeat(70) + '\n');
+
+  rcon = await Rcon.connect(RCON_CFG);
+  console.log('RCON connected\n');
+
+  // Regenerate spleef snow layers
+  await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
+  await rcon.send('fill -66 11 -11 -44 11 11 snow_block');
+  await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
+  console.log('Spleef snow regenerated\n');
+
+  // OP all bots
+  for (const def of BOT_DEFS) {
+    try { await rcon.send(`op ${def.name}`); } catch {}
+  }
+  console.log('All bots OP\'d\n');
+
+  // Spawn first bot of each pair
+  console.log('Spawning first wave (4 bots)...\n');
+  const firstWave = BOT_DEFS.filter((_, i) => i % 2 === 0);
+  for (const def of firstWave) {
+    createArenaBot(def);
+  }
+
+  // Wait for first wave to be ready, then spawn second wave
+  await sleep(8000);
+  console.log('\nSpawning second wave (4 bots)...\n');
+  const secondWave = BOT_DEFS.filter((_, i) => i % 2 === 1);
+  for (const def of secondWave) {
+    createArenaBot(def);
+  }
+
+  console.log('\nAll 8 bots launched! Monitoring...\n');
+
+  // Entity cleanup every 2 minutes (arrows, dropped items)
+  setInterval(entityCleanup, 120000);
+
+  // Spleef snow regen every 3 minutes
+  setInterval(async () => {
+    if (!rcon) return;
+    try {
+      await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
+      await rcon.send('fill -66 11 -11 -44 11 11 snow_block');
+      await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
+      console.log('[REGEN] Spleef snow regenerated');
+    } catch {}
+  }, 180000);
+
+  // Global status report every 30s
+  setInterval(() => {
+    console.log('\n' + '='.repeat(80));
+    console.log(`[${ts()}] GLOBAL STATUS`);
+    console.log('='.repeat(80));
+    for (const [name, stats] of Object.entries(botStats)) {
+      const fighting = stats.active && (stats.attacks > 0 || stats.blocks_dug > 0 || stats.arrows_shot > 0);
+      const status = stats.active ? (fighting ? 'FIGHTING' : 'IDLE') : 'INACTIVE';
+      console.log(`  ${name.padEnd(10)} | ${stats.arena.padEnd(8)} | ATK:${String(stats.attacks).padStart(4)} | ` +
+        `DIG:${String(stats.blocks_dug).padStart(4)} | ARW:${String(stats.arrows_shot).padStart(4)} | ` +
+        `DEATHS:${stats.deaths} | TICKS:${stats.tickCount} | ${status}`);
+    }
+    console.log('='.repeat(80) + '\n');
+  }, 30000);
+}
+
+main().catch(e => { console.error('Fatal:', e.message); process.exit(1); });
 
 process.on('SIGINT', () => {
-  console.log('[ArenaBot] Shutting down...');
-  stopCombatLoop();
-  if (scanLoopId) clearInterval(scanLoopId);
-  bot.quit();
-  setTimeout(() => process.exit(0), 1000);
+  console.log('\nShutting down all bots...');
+  for (const [name, bot] of Object.entries(botInstances)) {
+    try { bot.quit(); } catch {}
+  }
+  if (rcon) rcon.end();
+  process.exit(0);
 });

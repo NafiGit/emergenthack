@@ -10,7 +10,8 @@
     "start-web-client": "cd web-client && pnpm start",
     "start-spectator-viewer": "echo 'Prismarine spectator viewers start automatically with agents on ports 3002-3004'",
     "build-arena-village": "node src/build-arena-village.js",
-    "start-arena-bot": "node src/arena-bot.js"
+    "start-arena-bot": "node src/arena-bot.js",
+    "test-arenas": "node src/test-arenas.js"
   },
   "dependencies": {
     "axios": "^1.6.7",

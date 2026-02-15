@@ -55,7 +55,7 @@ serverProcess.stdout.on('data', (data) => {
     const match = line.match(/(\w+) joined the game/);
     if (match) {
       const name = match[1];
-      if (['Saumya', 'Sumedha', 'Ahaan', 'Architect', 'ArenaBuilder', 'ArenaBot'].includes(name)) {
+      if (['Saumya', 'Sumedha', 'Ahaan', 'Architect', 'ArenaBuilder', 'ArenaBot', 'Pvp1', 'Pvp2', 'Sumo1', 'Sumo2', 'Spleef1', 'Spleef2', 'Archer1', 'Archer2'].includes(name)) {
         setTimeout(() => {
           serverProcess.stdin.write(`op ${name}\n`);
           console.log(`🔑 Auto-opped agent: ${name}`);

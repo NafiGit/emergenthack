@@ -26,12 +26,12 @@ const ARENAS = {
   archery: { x: 0,   z: -55, name: 'Archery Arena',  color: 'yellow' },
 };
 
-// Arena spawn points (where players teleport to)
+// Arena spawn points (MUST be inside ARENA_AREAS detection boxes)
 const ARENA_SPAWNS = {
-  pvp:     { x: 0,   y: Y,       z: 44 },
-  sumo:    { x: 44,  y: G + 8,   z: 0 },
-  spleef:  { x: -43, y: G + 13,  z: 0 },
-  archery: { x: 0,   y: Y,       z: -44 },
+  pvp:     { x: 0,   y: Y,       z: 55 },
+  sumo:    { x: 55,  y: G + 8,   z: 0 },
+  spleef:  { x: -55, y: G + 13,  z: 0 },
+  archery: { x: 0,   y: Y,       z: -55 },
 };
 
 // Area selectors for detecting players in arenas (x,y,z,dx,dy,dz box)
@@ -81,6 +81,11 @@ async function main() {
   console.log('[0/8] Silencing command blocks...');
   await rcon.send('gamerule commandBlockOutput false');
   await rcon.send('gamerule sendCommandFeedback false');
+
+  console.log('[0.5/8] Force-loading arena chunks...');
+  // Keep all arena chunks permanently loaded so command blocks always execute
+  // and fill/setblock commands work even when no player is nearby
+  await rcon.send('forceload add -80 -80 80 80');
 
   console.log('[1/8] Clearing build area...');
   await runCmds(rcon, clearArea());
@@ -135,19 +140,24 @@ async function runCmds(rcon, cmds) {
   }
 }
 
+// Escape double quotes inside a command so it can be placed in Command:"..." NBT
+function escCmd(command) {
+  return command.replace(/"/g, '\\"');
+}
+
 // Place an impulse command block (button-triggered, facing down for chaining)
 function cmdBlockDown(x, y, z, command) {
-  return `setblock ${x} ${y} ${z} command_block[facing=down]{Command:"${command}"} replace`;
+  return `setblock ${x} ${y} ${z} command_block[facing=down]{Command:"${escCmd(command)}"} replace`;
 }
 
 // Place a repeating command block (always active)
 function repeatBlock(x, y, z, facing, command) {
-  return `setblock ${x} ${y} ${z} repeating_command_block[facing=${facing}]{auto:1b,Command:"${command}"} replace`;
+  return `setblock ${x} ${y} ${z} repeating_command_block[facing=${facing}]{auto:1b,Command:"${escCmd(command)}"} replace`;
 }
 
 // Place a chain command block (runs after previous)
 function chainBlock(x, y, z, facing, command) {
-  return `setblock ${x} ${y} ${z} chain_command_block[facing=${facing}]{auto:1b,Command:"${command}"} replace`;
+  return `setblock ${x} ${y} ${z} chain_command_block[facing=${facing}]{auto:1b,Command:"${escCmd(command)}"} replace`;
 }
 
 // Area selector string for @a in an arena
@@ -273,16 +283,54 @@ function clearArea() {
 
 function setupScoreboards() {
   return [
+    // Internal timer objective (tick counter per arena)
     'scoreboard objectives add timer dummy',
     'scoreboard players set pvp_t timer 0',
     'scoreboard players set sumo_t timer 0',
     'scoreboard players set spleef_t timer 0',
     'scoreboard players set archery_t timer 0',
-    // Kill & win tracking
+
+    // Player-visible objectives
     'scoreboard objectives add kills playerKillCount {"text":"Arena Kills","color":"gold"}',
     'scoreboard objectives add wins dummy {"text":"Arena Wins","color":"aqua"}',
-    'scoreboard objectives setdisplay sidebar kills',
+
+    // Hypixel-style sidebar — dummy objective with fake player lines + teams for text
+    'scoreboard objectives add sidebar dummy {"text":"MINEFORGE","bold":true,"color":"gold"}',
+    'scoreboard objectives setdisplay sidebar sidebar',
     'scoreboard objectives setdisplay belowName kills',
+
+    // Sidebar line entries (score = vertical ordering, highest = top)
+    'scoreboard players set line_01 sidebar 10',
+    'scoreboard players set line_02 sidebar 9',
+    'scoreboard players set line_03 sidebar 8',
+    'scoreboard players set line_04 sidebar 7',
+    'scoreboard players set line_05 sidebar 6',
+    'scoreboard players set line_06 sidebar 5',
+    'scoreboard players set line_07 sidebar 4',
+    'scoreboard players set line_08 sidebar 3',
+
+    // Create teams for each line (prefix controls displayed text)
+    'team add sb01', 'team add sb02', 'team add sb03', 'team add sb04',
+    'team add sb05', 'team add sb06', 'team add sb07', 'team add sb08',
+
+    // Join fake players to teams
+    'team join sb01 line_01', 'team join sb02 line_02',
+    'team join sb03 line_03', 'team join sb04 line_04',
+    'team join sb05 line_05', 'team join sb06 line_06',
+    'team join sb07 line_07', 'team join sb08 line_08',
+
+    // Set line text via team prefixes
+    'team modify sb01 prefix {"text":"Arena Village","color":"white"}',
+    'team modify sb02 prefix {"text":""}',
+    'team modify sb03 prefix [{"text":"Mode: ","color":"gray"},{"text":"1v1 Duel","color":"aqua"}]',
+    'team modify sb04 prefix [{"text":"Timer: ","color":"gray"},{"text":"2:00","color":"green"}]',
+    'team modify sb05 prefix {"text":""}',
+    'team modify sb06 prefix [{"text":"Kills: ","color":"gray"},{"text":"0","color":"yellow"}]',
+    'team modify sb07 prefix [{"text":"Wins: ","color":"gray"},{"text":"0","color":"green"}]',
+    'team modify sb08 prefix [{"text":"play.mineforge.gg","color":"dark_gray","italic":true}]',
+
+    // Show death messages for kill tracking
+    'gamerule showDeathMessages true',
   ];
 }
 
