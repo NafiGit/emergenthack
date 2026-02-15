@@ -38,6 +38,9 @@ serverProcess.stdout.on('data', (data) => {
   const line = data.toString().trim();
   if (!line) return;
 
+  // Suppress command block spam (timer resets, scoreboard updates)
+  if (line.includes('Set [timer]') || line.includes('[@:') && line.includes('to 0]')) return;
+
   // Detect server ready
   if (line.includes('Done (') && line.includes('For help,')) {
     console.log('✅ Server running on port', PORT);
@@ -52,13 +55,37 @@ serverProcess.stdout.on('data', (data) => {
     const match = line.match(/(\w+) joined the game/);
     if (match) {
       const name = match[1];
-      if (['Saumya', 'Sumedha', 'Ahaan'].includes(name)) {
+      if (['Saumya', 'Sumedha', 'Ahaan', 'Architect', 'ArenaBuilder'].includes(name)) {
         setTimeout(() => {
           serverProcess.stdin.write(`op ${name}\n`);
           console.log(`🔑 Auto-opped agent: ${name}`);
         }, 1000);
       }
     }
+  }
+
+  // Chat-based !tp command for non-OP players
+  const chatMatch = line.match(/<(\w+)> !tp\s+(.+)/);
+  if (chatMatch) {
+    const [, player, args] = chatMatch;
+    // Allow: !tp <x> <y> <z> or !tp <player>
+    const coordMatch = args.match(/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/);
+    const playerMatch = args.match(/^(\w+)$/);
+    if (coordMatch) {
+      serverProcess.stdin.write(`tp ${player} ${coordMatch[1]} ${coordMatch[2]} ${coordMatch[3]}\n`);
+      console.log(`🔀 Teleported ${player} to ${coordMatch[1]} ${coordMatch[2]} ${coordMatch[3]}`);
+    } else if (playerMatch) {
+      serverProcess.stdin.write(`tp ${player} ${playerMatch[1]}\n`);
+      console.log(`🔀 Teleported ${player} to ${playerMatch[1]}`);
+    }
+  }
+
+  // Chat-based !kill command for non-OP players
+  const killMatch = line.match(/<(\w+)> !kill$/);
+  if (killMatch) {
+    const player = killMatch[1];
+    serverProcess.stdin.write(`kill ${player}\n`);
+    console.log(`💀 Killed ${player} (by own request)`);
   }
 
   // Detect player joins/leaves
@@ -89,10 +116,15 @@ serverProcess.on('close', (code) => {
   process.exit(code || 0);
 });
 
-// Forward stdin to server console
-process.stdin.on('data', (data) => {
-  serverProcess.stdin.write(data);
-});
+// Forward stdin to server console (only if stdin is a TTY/pipe, not closed)
+if (process.stdin.readable) {
+  process.stdin.on('data', (data) => {
+    serverProcess.stdin.write(data);
+  });
+  process.stdin.on('end', () => {
+    // stdin closed (e.g. nohup/background) — don't forward EOF to server
+  });
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
