@@ -563,7 +563,7 @@ function buildSumoArena() {
 
   // Staircase
   for (let step = 0; step < 7; step++) {
-    cmds.push(`fill ${ax-16-step} ${Y+step} ${az-1} ${ax-16-step} ${Y+step} ${az+1} quartz_stairs[facing=east]`);
+    cmds.push(`fill ${ax-16-step} ${Y+step} ${az-1} ${ax-16-step} ${Y+step} ${az+1} quartz_stairs[facing=west]`);
     cmds.push(`setblock ${ax-16-step} ${Y+step} ${az-2} quartz_block`);
     cmds.push(`setblock ${ax-16-step} ${Y+step} ${az+2} quartz_block`);
   }
@@ -624,7 +624,7 @@ function buildSpleefArena() {
 
   // Staircase
   for (let step = 0; step < 9; step++) {
-    cmds.push(`fill ${ax+19+step} ${Y+step} ${az-1} ${ax+19+step} ${Y+step} ${az+1} quartz_stairs[facing=west]`);
+    cmds.push(`fill ${ax+19+step} ${Y+step} ${az-1} ${ax+19+step} ${Y+step} ${az+1} quartz_stairs[facing=east]`);
   }
 
   // Lighting

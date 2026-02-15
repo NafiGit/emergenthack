@@ -66,21 +66,204 @@ let rcon = null;
 const botInstances = {};  // name → mineflayer bot
 const botStats = {};      // name → { attacks, blocks_dug, arrows_shot, deaths, tickCount, staleTicks, active }
 const isEating = {};      // name → boolean (prevents golden apple spam)
-const isReturning = {};   // name → boolean (prevents double match-end triggers)
 const isReconnecting = {}; // name → boolean (prevents duplicate reconnect loops)
-let lastSpleefRegen = 0;   // timestamp — debounce snow regen (once per 5s max)
 
-async function regenSpleefSnow() {
-  const now = Date.now();
-  if (now - lastSpleefRegen < 5000) return; // debounce: max once per 5s
-  lastSpleefRegen = now;
-  if (!rcon) return;
-  try {
-    await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
-    await rcon.send('fill -66 11 -11 -44 11 11 snow_block');
-    await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
-    console.log(`[${ts()}] [SPLEEF-REGEN] Snow layers regenerated`);
-  } catch (e) { console.log(`[${ts()}] [SPLEEF-REGEN] Error: ${e.message}`); }
+// ─── Match Lifecycle — one self-driving game loop per arena ─────
+// States: WAITING → COUNTDOWN → ACTIVE → ENDING → RESETTING → WAITING
+const arenaMatches = {
+  pvp:     { state: 'WAITING', startTime: 0, winner: null, matchNum: 0 },
+  sumo:    { state: 'WAITING', startTime: 0, winner: null, matchNum: 0 },
+  spleef:  { state: 'WAITING', startTime: 0, winner: null, matchNum: 0 },
+  archery: { state: 'WAITING', startTime: 0, winner: null, matchNum: 0 },
+};
+
+// Signal channel: death/fall/forcedMove resolves the promise to end active match
+const matchEndResolvers = {}; // arena → { resolve }
+
+function signalMatchEnd(arena, reason, winner = null) {
+  const r = matchEndResolvers[arena];
+  if (r) {
+    delete matchEndResolvers[arena];
+    r.resolve({ reason, winner });
+  }
+}
+
+const AREA_SELECTORS = {
+  pvp:     'x=-12,y=0,z=43,dx=24,dy=30,dz=24',
+  sumo:    'x=43,y=0,z=-12,dx=24,dy=30,dz=24',
+  spleef:  'x=-67,y=0,z=-12,dx=24,dy=30,dz=24',
+  archery: 'x=-14,y=0,z=-62,dx=28,dy=30,dz=14',
+};
+
+const MATCH_DURATION = 120000; // 2 minutes
+
+// ─── The Game Loop (one per arena, runs forever) ──────
+async function arenaGameLoop(arena) {
+  const match = arenaMatches[arena];
+  const bots = BOT_DEFS.filter(d => d.arena === arena);
+
+  while (true) {
+    // ── WAITING: poll until both bots are connected ──
+    match.state = 'WAITING';
+    match.winner = null;
+    while (!botInstances[bots[0].name] || !botInstances[bots[1].name]) {
+      await sleep(2000);
+    }
+    await sleep(1000); // brief settle
+
+    // ── COUNTDOWN: 3-2-1-FIGHT ──
+    match.state = 'COUNTDOWN';
+    match.matchNum++;
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — COUNTDOWN`);
+
+    // Freeze bots at spawn
+    for (const def of bots) {
+      if (botStats[def.name]) botStats[def.name].active = false;
+      const bot = botInstances[def.name];
+      if (bot) {
+        bot.clearControlStates();
+        bot.chat(`/tp @s ${def.spawn.x} ${def.spawn.y} ${def.spawn.z}`);
+      }
+    }
+    await sleep(1000);
+
+    const countColors = { 3: 'yellow', 2: 'gold', 1: 'red' };
+    for (let i = 3; i >= 1; i--) {
+      for (const def of bots) {
+        try { await rcon.send(`title ${def.name} title {"text":"${i}","color":"${countColors[i]}","bold":true}`); } catch {}
+      }
+      console.log(`[${ts()}] [${arena.toUpperCase()}] ${i}...`);
+      await sleep(1000);
+    }
+    for (const def of bots) {
+      try {
+        await rcon.send(`title ${def.name} title {"text":"FIGHT!","color":"green","bold":true}`);
+        await rcon.send(`title ${def.name} subtitle {"text":"Match #${match.matchNum}","color":"gray"}`);
+      } catch {}
+    }
+
+    // ── ACTIVE: enable combat, wait for match end signal or timeout ──
+    match.state = 'ACTIVE';
+    match.startTime = Date.now();
+    for (const def of bots) {
+      if (botStats[def.name]) botStats[def.name].active = true;
+    }
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — FIGHT!`);
+
+    // Race: match-end signal vs timeout vs time announcements
+    let cleanupTimers = null;
+    const result = await new Promise(resolve => {
+      // Timeout after 2 minutes
+      const timeout = setTimeout(() => {
+        const hp1 = botInstances[bots[0].name]?.health || 0;
+        const hp2 = botInstances[bots[1].name]?.health || 0;
+        let winner = null, reason = 'Timeout (Draw)';
+        if (hp1 > hp2) { winner = bots[0].name; reason = `Timeout (${winner} had more HP)`; }
+        else if (hp2 > hp1) { winner = bots[1].name; reason = `Timeout (${winner} had more HP)`; }
+        signalMatchEnd(arena, reason, winner);
+      }, MATCH_DURATION);
+
+      // Time announcements
+      const announce = (ms, text, color) => setTimeout(() => {
+        if (match.state !== 'ACTIVE') return;
+        for (const def of bots) {
+          try { rcon.send(`title ${def.name} actionbar {"text":"${text}","color":"${color}"}`); } catch {}
+        }
+      }, MATCH_DURATION - ms);
+
+      const t60 = announce(60000, '1:00 remaining', 'yellow');
+      const t30 = announce(30000, '0:30 remaining', 'gold');
+      const t10 = announce(10000, '10 seconds!', 'red');
+
+      cleanupTimers = () => { clearTimeout(timeout); clearTimeout(t60); clearTimeout(t30); clearTimeout(t10); };
+      matchEndResolvers[arena] = { resolve };
+    });
+
+    // Clean up timers on early match end (death/fall before 2 min)
+    if (cleanupTimers) cleanupTimers();
+
+    // ── ENDING: stop combat, announce winner ──
+    match.state = 'ENDING';
+    match.winner = result.winner;
+
+    for (const def of bots) {
+      if (botStats[def.name]) botStats[def.name].active = false;
+      const bot = botInstances[def.name];
+      if (bot) try { bot.clearControlStates(); } catch {}
+    }
+
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — ${result.reason} | Winner: ${result.winner || 'DRAW'}`);
+
+    const titleText = result.winner ? `${result.winner} WINS!` : 'DRAW';
+    const titleColor = result.winner ? 'green' : 'yellow';
+    for (const def of bots) {
+      try {
+        await rcon.send(`title ${def.name} title {"text":"${titleText}","color":"${titleColor}","bold":true}`);
+        await rcon.send(`title ${def.name} subtitle {"text":"${result.reason}","color":"gray"}`);
+      } catch {}
+    }
+    if (result.winner) {
+      try { await rcon.send(`scoreboard players add ${result.winner} wins 1`); } catch {}
+      if (botStats[result.winner]) botStats[result.winner].kills++;
+    }
+
+    await sleep(3000); // Show result
+
+    // ── RESETTING: regen terrain, clean entities, heal, regive items ──
+    match.state = 'RESETTING';
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Resetting...`);
+
+    try {
+      // Spleef snow regen (BEFORE teleport)
+      if (arena === 'spleef') {
+        await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
+        await rcon.send('fill -66 11 -11 -44 11 11 snow_block');
+        await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
+        await sleep(500);
+      }
+
+      // Kill entities in arena
+      const sel = AREA_SELECTORS[arena];
+      try { await rcon.send(`kill @e[type=item,${sel}]`); } catch {}
+      try { await rcon.send(`kill @e[type=arrow,${sel}]`); } catch {}
+      try { await rcon.send(`kill @e[type=experience_orb,${sel}]`); } catch {}
+
+      // TP to spawn
+      for (const def of bots) {
+        const bot = botInstances[def.name];
+        if (bot) bot.chat(`/tp @s ${def.spawn.x} ${def.spawn.y} ${def.spawn.z}`);
+      }
+      await sleep(1000);
+
+      // Heal
+      for (const def of bots) {
+        try { await rcon.send(`effect give ${def.name} minecraft:instant_health 1 5`); } catch {}
+        try { await rcon.send(`effect give ${def.name} minecraft:saturation 5 5 true`); } catch {}
+      }
+
+      // Clear + regive items
+      for (const def of bots) {
+        const bot = botInstances[def.name];
+        if (!bot) continue;
+        bot.chat('/clear @s');
+        await sleep(200);
+        await giveItems(def.name, arena);
+        await sleep(500);
+        await equipForArena(bot, def.name, arena);
+      }
+    } catch (e) {
+      console.log(`[${ts()}] [${arena.toUpperCase()}] Reset error: ${e.message}`);
+    }
+
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Reset complete. Next match in 3s...`);
+    await sleep(3000); // Cooldown before next match
+  }
+}
+
+// Keep endMatch as a thin wrapper for death/fall/forcedMove handlers
+function endMatch(arena, reason, winner = null) {
+  signalMatchEnd(arena, reason, winner);
+  return Promise.resolve();
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -253,11 +436,11 @@ async function sumoTick(bot, name, target) {
   const dist = bot.entity.position.distanceTo(target.position);
   const pos = bot.entity.position;
 
-  // Fall detection — re-TP if fell off platform
+  // Fall detection — opponent wins
   if (pos.y < SUMO_FALL_Y) {
-    log(name, `FELL OFF PLATFORM! (y=${pos.y.toFixed(1)}) Re-teleporting...`);
+    log(name, `FELL OFF PLATFORM! (y=${pos.y.toFixed(1)})`);
     const def = BOT_DEFS.find(d => d.name === name);
-    bot.chat(`/tp @s ${def.spawn.x} ${def.spawn.y} ${def.spawn.z}`);
+    endMatch('sumo', `${name} fell off`, def.opponent).catch(() => {});
     return;
   }
 
@@ -421,34 +604,7 @@ async function archeryTick(bot, name, target) {
 
 const combatFns = { pvp: pvpTick, sumo: sumoTick, spleef: spleefTick, archery: archeryTick };
 
-// ─── Return to arena after match end ───────────────────────
-
-async function returnToArena(bot, name, arena, spawn, stats) {
-  if (isReturning[name]) return; // prevent double triggers
-  isReturning[name] = true;
-  stats.active = false;
-  log(name, '[MATCH-END] Returning to arena in 5s...');
-
-  await sleep(5000);
-  try {
-    if (arena === 'spleef') {
-      await regenSpleefSnow();
-      await sleep(500);
-    }
-    bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
-    await sleep(2000);
-    bot.chat('/clear @s');
-    await sleep(200);
-    await giveItems(name, arena);
-    await sleep(500);
-    await equipForArena(bot, name, arena);
-    stats.active = true;
-    log(name, '[MATCH-END] Back in arena!');
-  } catch (e) {
-    log(name, `Return error: ${e.message}`);
-  }
-  isReturning[name] = false;
-}
+// returnToArena removed — match lifecycle handles respawn/reset
 
 // ─── Entity cleanup (arrows, items) every 2 min ───────────
 
@@ -515,12 +671,13 @@ function createArenaBot(def) {
     await equipForArena(bot, name, arena);
     log(name, `Equipped for ${arena}`);
 
-    botStats[name].active = true;
+    botStats[name].active = false; // Inactive until match lifecycle starts
     botInstances[name] = bot;
 
-    // Start combat loop (250ms)
+    // Start combat loop (250ms) — only ticks during ACTIVE match state
     const combatFn = combatFns[arena];
     combatInterval = setInterval(async () => {
+      if (arenaMatches[arena]?.state !== 'ACTIVE') return;
       if (!botStats[name].active) return;
       const target = getOpponentEntity(name, opponent);
       if (!target) return;
@@ -557,10 +714,6 @@ function createArenaBot(def) {
         stats.staleTicks = 0;
       }
 
-      // Hub detection — if at hub, re-teleport to arena (with flag to prevent double)
-      if (!isReturning[name] && Math.abs(pos.x - HUB_POS.x) < 3 && Math.abs(pos.z - HUB_POS.z) < 3 && Math.abs(pos.y - HUB_POS.y) < 3) {
-        returnToArena(bot, name, arena, spawn, stats);
-      }
     }, 10000);
 
     // Heatmap logging every 1s
@@ -576,48 +729,23 @@ function createArenaBot(def) {
     }, 1000);
   });
 
-  // Death handler
+  // Death handler — triggers match end via lifecycle
   bot.on('death', () => {
     botStats[name].deaths++;
-    log(name, `[DEATH] Killed! (death #${botStats[name].deaths}) Respawning in 3s...`);
-    botStats[name].active = false;
-
-    // Award kill to opponent
-    if (botStats[opponent]) botStats[opponent].kills++;
-    try { rcon.send(`scoreboard players add ${opponent} wins 1`); } catch {}
-
-    // Kill dropped items nearby to reduce entity spam
-    try { rcon.send('kill @e[type=item]'); } catch {}
-    try { rcon.send('kill @e[type=arrow]'); } catch {}
-    try { rcon.send('kill @e[type=experience_orb]'); } catch {}
-
-    setTimeout(async () => {
-      try {
-        // Regen spleef snow BEFORE teleporting back (prevents instant fall loop)
-        if (arena === 'spleef') {
-          await regenSpleefSnow();
-          await sleep(500); // let fill commands propagate
-        }
-        bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
-        await sleep(2000);
-        bot.chat('/clear @s');
-        await sleep(200);
-        await giveItems(name, arena);
-        await sleep(500);
-        await equipForArena(bot, name, arena);
-        botStats[name].active = true;
-        log(name, `[RESPAWN] Back in action! HP:${bot.health}`);
-      } catch (e) {
-        log(name, `Respawn error: ${e.message}`);
-      }
-    }, 3000);
+    log(name, `[DEATH] Killed by ${opponent}! (death #${botStats[name].deaths})`);
+    endMatch(arena, `${name} was killed`, opponent).catch(e => {
+      log(name, `Match end error: ${e.message}`);
+    });
   });
 
-  // Forced move (timer TP'd to hub)
+  // Forced move (timer TP'd to hub) — end match as timeout
   bot.on('forcedMove', () => {
+    const match = arenaMatches[arena];
+    if (match && (match.state === 'ENDING' || match.state === 'RESETTING')) return;
     const pos = bot.entity?.position;
-    if (pos && !isReturning[name] && Math.abs(pos.x - HUB_POS.x) < 5 && Math.abs(pos.z - HUB_POS.z) < 5) {
-      returnToArena(bot, name, arena, spawn, botStats[name]);
+    if (pos && Math.abs(pos.x - HUB_POS.x) < 5 && Math.abs(pos.z - HUB_POS.z) < 5) {
+      log(name, 'ForcedMove to hub (command block timer expired)');
+      endMatch(arena, 'Timer expired', null).catch(() => {});
     }
   });
 
@@ -707,16 +835,13 @@ async function main() {
   // Entity cleanup every 2 minutes (arrows, dropped items)
   setInterval(entityCleanup, 120000);
 
-  // Spleef snow regen every 3 minutes
-  setInterval(async () => {
-    if (!rcon) return;
-    try {
-      await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
-      await rcon.send('fill -66 11 -11 -44 11 11 snow_block');
-      await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
-      console.log('[REGEN] Spleef snow regenerated');
-    } catch {}
-  }, 180000);
+  // ─── Launch 4 independent game loops (one per arena) ───
+  for (const arena of ['pvp', 'sumo', 'spleef', 'archery']) {
+    arenaGameLoop(arena).catch(e => {
+      console.error(`[${ts()}] [${arena.toUpperCase()}] Game loop crashed: ${e.message}`);
+    });
+    console.log(`[${ts()}] Game loop started: ${arena}`);
+  }
 
   // Scoreboard sidebar updater — update live stats every 5s
   // Bot name → sidebar team mapping (sb05-sb12)
@@ -744,8 +869,9 @@ async function main() {
         if (stats.active) activeFights++;
       }
 
-      // Line 3: active fighters count
-      await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/8","color":"aqua"}]`);
+      // Line 3: active fighters + total matches
+      const totalMatches = Object.values(arenaMatches).reduce((sum, m) => sum + m.matchNum, 0);
+      await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/8","color":"aqua"},{"text":" Matches: ","color":"gray"},{"text":"${totalMatches}","color":"light_purple"}]`);
 
       // Lines 5-12: individual bot names with kills / deaths
       for (const [bName, team] of Object.entries(botSidebarTeam)) {
@@ -754,6 +880,14 @@ async function main() {
         const color = botColor[bName];
         await rcon.send(`team modify ${team} prefix [{"text":"${bName} ","color":"${color}"},{"text":"${s.kills}","color":"green"},{"text":"/","color":"gray"},{"text":"${s.deaths}","color":"red"}]`);
       }
+
+      // Line 4: per-arena match state
+      const arenaStates = ['pvp', 'sumo', 'spleef', 'archery'].map(a => {
+        const m = arenaMatches[a];
+        const st = m.state === 'ACTIVE' ? 'green' : m.state === 'COUNTDOWN' ? 'yellow' : 'gray';
+        return `{"text":"${a[0].toUpperCase()}${m.matchNum}","color":"${st}"}`;
+      }).join(',{"text":" ","color":"gray"},');
+      await rcon.send(`team modify sb04 prefix [${arenaStates}]`);
 
       // Line 14: totals
       await rcon.send(`team modify sb14 prefix [{"text":"Kills: ","color":"gray"},{"text":"${totalKills}","color":"yellow"},{"text":" Deaths: ","color":"gray"},{"text":"${totalDeaths}","color":"red"}]`);
@@ -767,17 +901,22 @@ async function main() {
 
   // Global status report every 30s
   setInterval(() => {
-    console.log('\n' + '='.repeat(80));
+    console.log('\n' + '='.repeat(90));
     console.log(`[${ts()}] GLOBAL STATUS`);
-    console.log('='.repeat(80));
+    console.log('-'.repeat(90));
+    for (const [arena, match] of Object.entries(arenaMatches)) {
+      const elapsed = match.state === 'ACTIVE' ? Math.floor((Date.now() - match.startTime) / 1000) : 0;
+      console.log(`  ${arena.padEnd(8)} | State: ${match.state.padEnd(10)} | Match #${match.matchNum} | ` +
+        `Winner: ${(match.winner || '-').padEnd(8)} | Elapsed: ${elapsed}s`);
+    }
+    console.log('-'.repeat(90));
     for (const [name, stats] of Object.entries(botStats)) {
-      const fighting = stats.active && (stats.attacks > 0 || stats.blocks_dug > 0 || stats.arrows_shot > 0);
-      const status = stats.active ? (fighting ? 'FIGHTING' : 'IDLE') : 'INACTIVE';
+      const status = stats.active ? 'FIGHTING' : 'IDLE';
       console.log(`  ${name.padEnd(10)} | ${stats.arena.padEnd(8)} | ATK:${String(stats.attacks).padStart(4)} | ` +
         `DIG:${String(stats.blocks_dug).padStart(4)} | ARW:${String(stats.arrows_shot).padStart(4)} | ` +
-        `DEATHS:${stats.deaths} | TICKS:${stats.tickCount} | ${status}`);
+        `K:${stats.kills} D:${stats.deaths} | TICKS:${stats.tickCount} | ${status}`);
     }
-    console.log('='.repeat(80) + '\n');
+    console.log('='.repeat(90) + '\n');
   }, 30000);
 }
 
