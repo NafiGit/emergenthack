@@ -1,0 +1,14 @@
+{
+  "arena": "pvp",
+  "theme": "PvP Combat Arena",
+  "center": { "x": 0, "z": 55 },
+  "bounds": { "x1": -12, "x2": 12, "z1": 43, "z2": 67 },
+  "spawn": { "x": 0, "y": 4, "z": 55 },
+  "ground_y": 3,
+  "build_y": 4,
+  "screenshot_pos": { "x": 0, "y": 35, "z": 55 },
+  "viewer_port": 3010,
+  "items": ["iron_sword", "shield", "golden_apple x3"],
+  "current_blocks": ["red_concrete", "nether_bricks", "netherrack"],
+  "notes": "South of hub. Flat rectangle, no obstacles. Needs cover, pillars, or terrain features."
+}

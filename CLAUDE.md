@@ -18,6 +18,7 @@ npm run start-ai-agents          # Start all 3 AI agents with LLM decision loop
 npm run start-api-server         # Start REST API server for manual bot control (port 4000)
 npm run start-web-client         # Start browser-based Minecraft client (requires pnpm in web-client/)
 npm run build-arena-village      # Build the MineForge arena village at spawn via RCON (one-time, persists in world)
+npm run start-arena-bot          # Start AI competitor bot (joins arenas with players, fights with per-arena AI)
 ```
 
 Spectator viewers (prismarine-viewer) auto-start with agents on ports 3002-3004.
@@ -72,7 +73,8 @@ If the LLM fails, deterministic fallback structure templates are used. Retry log
 - **`src/agentMemory.js`** — Shared blackboard memory with TTL (default 5 min). Categories: resources, POIs, objectives
 - **`src/eventBus.js`** — Pub/sub event system for bot actions. Caches last 50 events, logs to `agents/{name}/{name}_actions.log` (rolling 100 lines)
 - **`src/messageSystem.js`** — Inter-agent direct messaging with inboxes (max 10 messages, rolling)
-- **`server/start-server.js`** — Node.js launcher for the Java Minecraft server. Auto-accepts EULA, auto-ops agents on join (Saumya, Sumedha, Ahaan, Architect, ArenaBuilder)
+- **`src/arena-bot.js`** — AI arena competitor bot. State machine (IDLE → ENTERING → FIGHTING → IDLE). Scans for players in arenas every 1s, teleports to join, fights with arena-specific combat AI (PvP melee/heal, Sumo knockback/center-control, Spleef dig-under-opponent, Archery aim-shoot-cover). Tracks wins via scoreboard commands.
+- **`server/start-server.js`** — Node.js launcher for the Java Minecraft server. Auto-accepts EULA, auto-ops agents on join (Saumya, Sumedha, Ahaan, Architect, ArenaBuilder, ArenaBot)
 - **`agents/minecraft_mcp_server.py`** — Python MCP server for RCON control (requires `mcrcon`, `mcp` — see `agents/requirements.txt`)
 
 ### Building Structures
@@ -92,6 +94,7 @@ The arena village uses command blocks for interactive gameplay:
 - **Timer system**: Per-arena repeating + chain command block chains buried at y=1. Uses scoreboard objective `timer` with fake players (`pvp_t`, `sumo_t`, `spleef_t`, `archery_t`). 2400 ticks = 2 minutes, with countdown warnings at 60s/30s/10s.
 - **Area detection**: `@a[x=..,y=..,z=..,dx=..,dy=..,dz=..]` box selectors detect players inside arenas.
 - **Adventure mode**: `CanDestroy` NBT tag on spleef shovels allows breaking snow_block in adventure mode.
+- **Scoreboard**: `kills` (playerKillCount, auto-tracks PvP kills, shown on sidebar + below nametags) and `wins` (dummy, managed by arena bot on death/match end).
 
 ### LLM Provider Chain
 

@@ -1,0 +1,14 @@
+{
+  "arena": "spleef",
+  "theme": "Spleef Dig Arena",
+  "center": { "x": -55, "z": 0 },
+  "bounds": { "x1": -67, "x2": -43, "z1": -12, "z2": 12 },
+  "spawn": { "x": -55, "y": 16, "z": 0 },
+  "ground_y": 3,
+  "snow_layers": [7, 11, 15],
+  "screenshot_pos": { "x": -55, "y": 35, "z": 0 },
+  "viewer_port": 3012,
+  "items": ["iron_shovel with CanDestroy:snow_block"],
+  "current_blocks": ["green_concrete", "snow_block", "lava"],
+  "notes": "West of hub. 3 snow layers, lava at bottom. Needs better layer design, maybe obstacles on layers."
+}
