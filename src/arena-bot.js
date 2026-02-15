@@ -627,13 +627,17 @@ async function main() {
       // Line 3: active fighters count
       await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/8","color":"aqua"}]`);
 
-      // Lines 5-12: individual bot names with kills/deaths
+      // Lines 5-12: individual bot names with arena-relevant stat + deaths
       for (const [bName, team] of Object.entries(botSidebarTeam)) {
         const s = botStats[bName];
         if (!s) continue;
         const color = botColor[bName];
-        const statusIcon = s.active ? '\u2694 ' : '\u25cb ';
-        await rcon.send(`team modify ${team} prefix [{"text":"${statusIcon}${bName}","color":"${color}"},{"text":" ${s.attacks}K ${s.deaths}D","color":"gray"}]`);
+        // Show the relevant stat per arena
+        let statLabel, statVal;
+        if (s.arena === 'archery') { statLabel = 'S'; statVal = s.arrows_shot; }
+        else if (s.arena === 'spleef') { statLabel = 'D'; statVal = s.blocks_dug; }
+        else { statLabel = 'K'; statVal = s.attacks; }
+        await rcon.send(`team modify ${team} prefix [{"text":"${bName}","color":"${color}"},{"text":" ${statVal}${statLabel} ${s.deaths}D","color":"gray"}]`);
       }
 
       // Line 14: totals
