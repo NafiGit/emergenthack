@@ -77,6 +77,11 @@ async function main() {
 
   console.log('=== BUILDING MINEFORGE ARENA VILLAGE ===\n');
 
+  // Silence command block output FIRST to prevent log spam from old blocks
+  console.log('[0/8] Silencing command blocks...');
+  await rcon.send('gamerule commandBlockOutput false');
+  await rcon.send('gamerule sendCommandFeedback false');
+
   console.log('[1/8] Clearing build area...');
   await runCmds(rcon, clearArea());
 
@@ -253,7 +258,11 @@ function buildTimerChain(startX, startZ, arenaKey, equipItems = [], resetCmds = 
 
 function clearArea() {
   const cmds = [];
-  // Clear in quadrants to stay under 32768 block limit
+  // Kill old underground command blocks at y=1 FIRST (stops timer spam)
+  for (const [x1, z1, x2, z2] of [[-80, -80, 0, 0], [1, -80, 80, 0], [-80, 1, 0, 80], [1, 1, 80, 80]]) {
+    cmds.push(`fill ${x1} 0 ${z1} ${x2} 2 ${z2} stone`);
+  }
+  // Clear above-ground builds
   for (const [x1, z1, x2, z2] of [[-80, -80, 0, 0], [1, -80, 80, 0], [-80, 1, 0, 80], [1, 1, 80, 80]]) {
     cmds.push(`fill ${x1} ${Y} ${z1} ${x2} ${Y + 25} ${z2} air`);
   }

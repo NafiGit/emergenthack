@@ -38,6 +38,9 @@ serverProcess.stdout.on('data', (data) => {
   const line = data.toString().trim();
   if (!line) return;
 
+  // Suppress command block spam (timer resets, scoreboard updates)
+  if (line.includes('Set [timer]') || line.includes('[@:') && line.includes('to 0]')) return;
+
   // Detect server ready
   if (line.includes('Done (') && line.includes('For help,')) {
     console.log('✅ Server running on port', PORT);
@@ -113,10 +116,15 @@ serverProcess.on('close', (code) => {
   process.exit(code || 0);
 });
 
-// Forward stdin to server console
-process.stdin.on('data', (data) => {
-  serverProcess.stdin.write(data);
-});
+// Forward stdin to server console (only if stdin is a TTY/pipe, not closed)
+if (process.stdin.readable) {
+  process.stdin.on('data', (data) => {
+    serverProcess.stdin.write(data);
+  });
+  process.stdin.on('end', () => {
+    // stdin closed (e.g. nohup/background) — don't forward EOF to server
+  });
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
