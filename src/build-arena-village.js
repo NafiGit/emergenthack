@@ -278,6 +278,11 @@ function setupScoreboards() {
     'scoreboard players set sumo_t timer 0',
     'scoreboard players set spleef_t timer 0',
     'scoreboard players set archery_t timer 0',
+    // Kill & win tracking
+    'scoreboard objectives add kills playerKillCount {"text":"Arena Kills","color":"gold"}',
+    'scoreboard objectives add wins dummy {"text":"Arena Wins","color":"aqua"}',
+    'scoreboard objectives setdisplay sidebar kills',
+    'scoreboard objectives setdisplay belowName kills',
   ];
 }
 
