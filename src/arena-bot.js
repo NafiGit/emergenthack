@@ -598,6 +598,41 @@ async function main() {
     } catch {}
   }, 180000);
 
+  // Scoreboard sidebar updater — update live stats every 5s
+  setInterval(async () => {
+    if (!rcon) return;
+    try {
+      // Sum up total kills and wins across all bots
+      let totalKills = 0;
+      let totalWins = 0;
+      let totalDeaths = 0;
+      let activeFights = 0;
+      for (const stats of Object.values(botStats)) {
+        totalKills += stats.attacks;
+        totalDeaths += stats.deaths;
+        if (stats.active) activeFights++;
+      }
+
+      // Read actual wins from scoreboard
+      const winsResult = await rcon.send('scoreboard players list');
+
+      // Update sidebar team prefixes with live data
+      // Line 3: Mode + active fighters
+      await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/8","color":"aqua"}]`);
+
+      // Line 6: Total kills (attacks landed)
+      await rcon.send(`team modify sb06 prefix [{"text":"Kills: ","color":"gray"},{"text":"${totalKills}","color":"yellow"}]`);
+
+      // Line 7: Total deaths
+      await rcon.send(`team modify sb07 prefix [{"text":"Deaths: ","color":"gray"},{"text":"${totalDeaths}","color":"red"}]`);
+
+      // Also update kills scoreboard objective per bot
+      for (const [name, stats] of Object.entries(botStats)) {
+        await rcon.send(`scoreboard players set ${name} kills ${stats.attacks}`);
+      }
+    } catch {}
+  }, 5000);
+
   // Global status report every 30s
   setInterval(() => {
     console.log('\n' + '='.repeat(80));
