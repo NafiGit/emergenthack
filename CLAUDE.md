@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Base Island** — An AI-powered Minecraft civilization where 3 autonomous LLM-driven agents (Saumya, Sumedha, Ahaan) build and manage a virtual world themed around the Base blockchain (blue/white/quartz blocks). Built for the Emergent Hackathon. Includes a 4-arena PvP village at spawn for 1v1 mini-games.
+**MineForge** — An AI-powered Minecraft civilization where 3 autonomous LLM-driven agents build and manage a virtual world, with a 4-arena PvP village ("MineForge Arena Village") at spawn for 1v1 mini-games. Built for the Emergent Hackathon.
+
+The README.md uses marketing names (Vulkan, Terra, Sage) but the actual code uses **Saumya** (Protocol Architect), **Sumedha** (DeFi Designer), **Ahaan** (Governance Sage).
 
 ## Commands
 
@@ -15,12 +17,12 @@ npm run start-minecraft-server   # Start Minecraft Java server (1.16.2) via Node
 npm run start-ai-agents          # Start all 3 AI agents with LLM decision loop
 npm run start-api-server         # Start REST API server for manual bot control (port 4000)
 npm run start-web-client         # Start browser-based Minecraft client (requires pnpm in web-client/)
-npm run build-arena-village      # Build the 4-arena PvP village at spawn via RCON (one-time, persists in world)
+npm run build-arena-village      # Build the MineForge arena village at spawn via RCON (one-time, persists in world)
 ```
 
 Spectator viewers (prismarine-viewer) auto-start with agents on ports 3002-3004.
 
-No lint or test runner. Manual test scripts exist in the project root (e.g., `build_castle.py`, `test_agent_building.py`). ES modules (`"type": "module"` in package.json).
+No lint or test runner. Python helper scripts in project root (`build_castle.py`, `admin_tools.py`, etc.) use `mcrcon` for RCON. ES modules throughout (`"type": "module"` in package.json).
 
 ## Ports
 
@@ -64,9 +66,9 @@ If the LLM fails, deterministic fallback structure templates are used. Retry log
 
 ### Key Source Files
 
-- **`src/demo.js`** — Main orchestration: agent spawning, LLM integration, perceive-think-act loop, empire building state machine (10 phases)
+- **`src/demo.js`** — Main orchestration: agent spawning, LLM integration, perceive-think-act loop, empire building state machine (10 phases). **Note:** `GROUND_Y = -60` is set for 1.18+ but the server is 1.16.2 (ground at y=3) — agent builds may target invalid Y coords.
 - **`src/api-server.js`** — REST API (port 4000) for manual bot control: goto, move, chat, break, place, attack, look, etc.
-- **`src/build-arena-village.js`** — RCON-based arena builder: 4 mini-game arenas (PvP, Sumo, Spleef, Archery) at spawn. One-time script, structures persist in world
+- **`src/build-arena-village.js`** — RCON-based MineForge arena builder. Builds hub with interactive button teleporters, 4 arenas with 2-minute timer command blocks, and return-to-hub buttons. One-time script, structures persist in world.
 - **`src/agentMemory.js`** — Shared blackboard memory with TTL (default 5 min). Categories: resources, POIs, objectives
 - **`src/eventBus.js`** — Pub/sub event system for bot actions. Caches last 50 events, logs to `agents/{name}/{name}_actions.log` (rolling 100 lines)
 - **`src/messageSystem.js`** — Inter-agent direct messaging with inboxes (max 10 messages, rolling)
@@ -77,10 +79,19 @@ If the LLM fails, deterministic fallback structure templates are used. Retry log
 
 Two patterns for placing blocks programmatically:
 
-1. **Via mineflayer bot** (`bot.chat('/fill ...')`) — requires the bot to have OP. Used by `src/demo.js` and `src/build-demo.js`. Bot must be in the auto-OP list in `server/start-server.js`.
+1. **Via mineflayer bot** (`bot.chat('/fill ...')`) — requires the bot to have OP. Used by `src/demo.js`. Bot must be in the auto-OP list in `server/start-server.js`.
 2. **Via RCON** (`rcon.send('fill ...')`) — runs as server console, no OP needed. Used by `src/build-arena-village.js`. Connect to `localhost:25575` with password `minecraft123`. Commands sent without leading `/`.
 
 RCON is more reliable for build scripts. The `/fill` command has a 32768 block limit per call — split large fills into smaller chunks.
+
+### MineForge Arena Village
+
+The arena village uses command blocks for interactive gameplay:
+
+- **Button teleporters**: Impulse command blocks buried under stone buttons. `tp @p[distance=..3]` teleports the nearest player to the arena.
+- **Timer system**: Per-arena repeating + chain command block chains buried at y=1. Uses scoreboard objective `timer` with fake players (`pvp_t`, `sumo_t`, `spleef_t`, `archery_t`). 2400 ticks = 2 minutes, with countdown warnings at 60s/30s/10s.
+- **Area detection**: `@a[x=..,y=..,z=..,dx=..,dy=..,dz=..]` box selectors detect players inside arenas.
+- **Adventure mode**: `CanDestroy` NBT tag on spleef shovels allows breaking snow_block in adventure mode.
 
 ### LLM Provider Chain
 
@@ -103,7 +114,7 @@ Browser (localhost:9112) → WebSocket → Proxy (net-browserify) → TCP → MC
 
 ## Environment Setup
 
-Copy `.env.example` to `.env` and configure at least one LLM provider.
+Copy `.env.example` to `.env` and configure at least one LLM provider (Azure OpenAI recommended, OpenRouter free tier as fallback).
 
 ## Server Configuration
 

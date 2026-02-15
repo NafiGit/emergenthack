@@ -61,6 +61,30 @@ serverProcess.stdout.on('data', (data) => {
     }
   }
 
+  // Chat-based !tp command for non-OP players
+  const chatMatch = line.match(/<(\w+)> !tp\s+(.+)/);
+  if (chatMatch) {
+    const [, player, args] = chatMatch;
+    // Allow: !tp <x> <y> <z> or !tp <player>
+    const coordMatch = args.match(/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/);
+    const playerMatch = args.match(/^(\w+)$/);
+    if (coordMatch) {
+      serverProcess.stdin.write(`tp ${player} ${coordMatch[1]} ${coordMatch[2]} ${coordMatch[3]}\n`);
+      console.log(`🔀 Teleported ${player} to ${coordMatch[1]} ${coordMatch[2]} ${coordMatch[3]}`);
+    } else if (playerMatch) {
+      serverProcess.stdin.write(`tp ${player} ${playerMatch[1]}\n`);
+      console.log(`🔀 Teleported ${player} to ${playerMatch[1]}`);
+    }
+  }
+
+  // Chat-based !kill command for non-OP players
+  const killMatch = line.match(/<(\w+)> !kill$/);
+  if (killMatch) {
+    const player = killMatch[1];
+    serverProcess.stdin.write(`kill ${player}\n`);
+    console.log(`💀 Killed ${player} (by own request)`);
+  }
+
   // Detect player joins/leaves
   if (line.includes('joined the game')) {
     const match = line.match(/(\w+) joined the game/);
