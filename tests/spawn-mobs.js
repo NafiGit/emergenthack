@@ -3,8 +3,9 @@ import mineflayer from 'mineflayer';
 
 const bot = mineflayer.createBot({
   host: 'localhost',
-  port: 55916,
-  username: 'MobSpawner'
+  port: 25565,
+  username: 'MobSpawner',
+  version: '1.19.2'
 });
 
 bot.on('spawn', () => {

@@ -36,7 +36,7 @@ cat > package.json << 'EOF'
     "mineflayer-pathfinder": "^2.4.5",
     "mineflayer-collectblock": "^1.4.1",
     "prismarine-viewer": "^1.28.0",
-    "flying-squid": "^1.17.1",
+    "flying-squid": "^1.11.0",
     "axios": "^1.6.7",
     "dotenv": "^16.4.0"
   }
