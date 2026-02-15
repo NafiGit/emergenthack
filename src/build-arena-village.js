@@ -28,7 +28,7 @@ const ARENAS = {
 
 // Arena spawn points (MUST be inside ARENA_AREAS detection boxes)
 const ARENA_SPAWNS = {
-  pvp:     { x: 0,   y: Y,       z: 55 },
+  pvp:     { x: 0,   y: Y,       z: 52 },
   sumo:    { x: 55,  y: G + 8,   z: 0 },
   spleef:  { x: -55, y: G + 13,  z: 0 },
   archery: { x: 0,   y: Y,       z: -55 },

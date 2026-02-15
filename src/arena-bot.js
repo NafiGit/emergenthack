@@ -42,8 +42,8 @@ function logToFile(name, msg) {
 // ─── Bot pair definitions ──────────────────────────────────
 
 const BOT_DEFS = [
-  { name: 'Pvp1',    arena: 'pvp',     spawn: { x: 5, y: 4, z: 50 },    opponent: 'Pvp2' },
-  { name: 'Pvp2',    arena: 'pvp',     spawn: { x: -5, y: 4, z: 60 },   opponent: 'Pvp1' },
+  { name: 'Pvp1',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 46 },    opponent: 'Pvp2' },
+  { name: 'Pvp2',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 64 },   opponent: 'Pvp1' },
   { name: 'Sumo1',   arena: 'sumo',    spawn: { x: 50, y: 11, z: 5 },   opponent: 'Sumo2' },
   { name: 'Sumo2',   arena: 'sumo',    spawn: { x: 60, y: 11, z: -5 },  opponent: 'Sumo1' },
   { name: 'Spleef1', arena: 'spleef',  spawn: { x: -50, y: 16, z: 5 },  opponent: 'Spleef2' },
