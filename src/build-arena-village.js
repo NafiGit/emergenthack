@@ -299,22 +299,23 @@ function setupScoreboards() {
     'scoreboard objectives setdisplay sidebar sidebar',
     'scoreboard objectives setdisplay belowName kills',
 
-    // Sidebar line entries (score = vertical ordering, highest = top)
-    'scoreboard players set line_01 sidebar 16',
-    'scoreboard players set line_02 sidebar 15',
-    'scoreboard players set line_03 sidebar 14',
-    'scoreboard players set line_04 sidebar 13',
-    'scoreboard players set line_05 sidebar 12',
-    'scoreboard players set line_06 sidebar 11',
-    'scoreboard players set line_07 sidebar 10',
-    'scoreboard players set line_08 sidebar 9',
-    'scoreboard players set line_09 sidebar 8',
-    'scoreboard players set line_10 sidebar 7',
-    'scoreboard players set line_11 sidebar 6',
-    'scoreboard players set line_12 sidebar 5',
-    'scoreboard players set line_13 sidebar 4',
-    'scoreboard players set line_14 sidebar 3',
-    'scoreboard players set line_15 sidebar 2',
+    // Sidebar line entries — use §<color>§r as invisible player names (unique per line)
+    // §0§r, §1§r, ... §e§r = 15 unique invisible names
+    `scoreboard players set \u00a70\u00a7r sidebar 16`,
+    `scoreboard players set \u00a71\u00a7r sidebar 15`,
+    `scoreboard players set \u00a72\u00a7r sidebar 14`,
+    `scoreboard players set \u00a73\u00a7r sidebar 13`,
+    `scoreboard players set \u00a74\u00a7r sidebar 12`,
+    `scoreboard players set \u00a75\u00a7r sidebar 11`,
+    `scoreboard players set \u00a76\u00a7r sidebar 10`,
+    `scoreboard players set \u00a77\u00a7r sidebar 9`,
+    `scoreboard players set \u00a78\u00a7r sidebar 8`,
+    `scoreboard players set \u00a79\u00a7r sidebar 7`,
+    `scoreboard players set \u00a7a\u00a7r sidebar 6`,
+    `scoreboard players set \u00a7b\u00a7r sidebar 5`,
+    `scoreboard players set \u00a7c\u00a7r sidebar 4`,
+    `scoreboard players set \u00a7d\u00a7r sidebar 3`,
+    `scoreboard players set \u00a7e\u00a7r sidebar 2`,
 
     // Create teams for each line (prefix controls displayed text)
     'team add sb01', 'team add sb02', 'team add sb03', 'team add sb04',
@@ -322,15 +323,15 @@ function setupScoreboards() {
     'team add sb09', 'team add sb10', 'team add sb11', 'team add sb12',
     'team add sb13', 'team add sb14', 'team add sb15',
 
-    // Join fake players to teams
-    'team join sb01 line_01', 'team join sb02 line_02',
-    'team join sb03 line_03', 'team join sb04 line_04',
-    'team join sb05 line_05', 'team join sb06 line_06',
-    'team join sb07 line_07', 'team join sb08 line_08',
-    'team join sb09 line_09', 'team join sb10 line_10',
-    'team join sb11 line_11', 'team join sb12 line_12',
-    'team join sb13 line_13', 'team join sb14 line_14',
-    'team join sb15 line_15',
+    // Join invisible players to teams
+    `team join sb01 \u00a70\u00a7r`, `team join sb02 \u00a71\u00a7r`,
+    `team join sb03 \u00a72\u00a7r`, `team join sb04 \u00a73\u00a7r`,
+    `team join sb05 \u00a74\u00a7r`, `team join sb06 \u00a75\u00a7r`,
+    `team join sb07 \u00a76\u00a7r`, `team join sb08 \u00a77\u00a7r`,
+    `team join sb09 \u00a78\u00a7r`, `team join sb10 \u00a79\u00a7r`,
+    `team join sb11 \u00a7a\u00a7r`, `team join sb12 \u00a7b\u00a7r`,
+    `team join sb13 \u00a7c\u00a7r`, `team join sb14 \u00a7d\u00a7r`,
+    `team join sb15 \u00a7e\u00a7r`,
 
     // Set line text via team prefixes
     'team modify sb01 prefix {"text":"Arena Village","color":"white"}',
