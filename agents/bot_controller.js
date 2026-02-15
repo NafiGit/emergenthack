@@ -3,6 +3,7 @@ import mineflayer from 'mineflayer';
 import pathfinderPlugin from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pathfinderPlugin;
 import express from 'express';
+import { Rcon } from 'rcon-client';
 
 const app = express();
 app.use(express.json());
@@ -315,10 +316,214 @@ app.get('/bot/status/:name', (req, res) => {
   });
 });
 
+// RCON helper for building
+async function executeRCON(command) {
+  const rcon = await Rcon.connect({
+    host: 'localhost',
+    port: 25575,
+    password: 'minecraft123'
+  });
+  const response = await rcon.send(command);
+  await rcon.end();
+  return response;
+}
+
+// Building endpoints
+app.post('/bot/build_wall', async (req, res) => {
+  const { bot_name, x1, y1, z1, x2, y2, z2, block = 'stone' } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    // Move bot near the build location
+    const centerX = (x1 + x2) / 2;
+    const centerZ = (z1 + z2) / 2;
+    const goal = new goals.GoalNear(centerX, y1, centerZ, 3);
+    bot.pathfinder.setGoal(goal);
+
+    // Announce what the bot is building
+    bot.chat(`I'm building a wall!`);
+
+    // Wait for bot to get close
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Execute the build via RCON
+    const command = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`;
+    const response = await executeRCON(command);
+
+    bot.chat(`Wall complete!`);
+    res.json({ success: true, message: `${bot_name} built a wall`, rcon_response: response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/build_floor', async (req, res) => {
+  const { bot_name, x, y, z, width, length, block = 'stone' } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    // Move bot to the location
+    const goal = new goals.GoalNear(x, y, z, 3);
+    bot.pathfinder.setGoal(goal);
+
+    bot.chat(`Building a floor platform!`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Calculate floor bounds
+    const x1 = Math.floor(x - width / 2);
+    const x2 = Math.floor(x + width / 2);
+    const z1 = Math.floor(z - length / 2);
+    const z2 = Math.floor(z + length / 2);
+
+    const command = `fill ${x1} ${y} ${z1} ${x2} ${y} ${z2} ${block}`;
+    const response = await executeRCON(command);
+
+    bot.chat(`Floor is ready!`);
+    res.json({ success: true, message: `${bot_name} built a floor`, rcon_response: response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/build_cube', async (req, res) => {
+  const { bot_name, x, y, z, size, block = 'stone', hollow = false } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    const goal = new goals.GoalNear(x, y, z, 3);
+    bot.pathfinder.setGoal(goal);
+
+    const buildType = hollow ? 'hollow cube' : 'cube';
+    bot.chat(`Building a ${buildType}!`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const half = Math.floor(size / 2);
+    const x1 = x - half;
+    const x2 = x + half;
+    const y1 = y;
+    const y2 = y + size - 1;
+    const z1 = z - half;
+    const z2 = z + half;
+
+    const hollowFlag = hollow ? ' hollow' : '';
+    const command = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}${hollowFlag}`;
+    const response = await executeRCON(command);
+
+    bot.chat(`${buildType.charAt(0).toUpperCase() + buildType.slice(1)} complete!`);
+    res.json({ success: true, message: `${bot_name} built a ${buildType}`, rcon_response: response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/build_pillar', async (req, res) => {
+  const { bot_name, x, y_start, z, height, block = 'stone' } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    const goal = new goals.GoalNear(x, y_start, z, 2);
+    bot.pathfinder.setGoal(goal);
+
+    bot.chat(`Building a pillar!`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const y_end = y_start + height - 1;
+    const command = `fill ${x} ${y_start} ${z} ${x} ${y_end} ${z} ${block}`;
+    const response = await executeRCON(command);
+
+    bot.chat(`Pillar stands tall!`);
+    res.json({ success: true, message: `${bot_name} built a pillar`, rcon_response: response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/build_pyramid', async (req, res) => {
+  const { bot_name, x, y, z, size, block = 'sandstone' } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    const goal = new goals.GoalNear(x, y, z, 3);
+    bot.pathfinder.setGoal(goal);
+
+    bot.chat(`Building a pyramid!`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const responses = [];
+    for (let level = 0; level < size; level++) {
+      const half = Math.floor((size - level) / 2);
+      const x1 = x - half;
+      const x2 = x + half;
+      const z1 = z - half;
+      const z2 = z + half;
+      const y_level = y + level;
+
+      const command = `fill ${x1} ${y_level} ${z1} ${x2} ${y_level} ${z2} ${block}`;
+      const response = await executeRCON(command);
+      responses.push(`Level ${level}: ${response}`);
+
+      // Small delay between levels
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    bot.chat(`Pyramid complete!`);
+    res.json({ success: true, message: `${bot_name} built a pyramid`, rcon_responses: responses });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/bot/clear_area', async (req, res) => {
+  const { bot_name, x1, y1, z1, x2, y2, z2 } = req.body;
+  const bot = bots.get(bot_name);
+
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  try {
+    const centerX = (x1 + x2) / 2;
+    const centerZ = (z1 + z2) / 2;
+    const goal = new goals.GoalNear(centerX, y1, centerZ, 3);
+    bot.pathfinder.setGoal(goal);
+
+    bot.chat(`Clearing area!`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const command = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} air`;
+    const response = await executeRCON(command);
+
+    bot.chat(`Area cleared!`);
+    res.json({ success: true, message: `${bot_name} cleared an area`, rcon_response: response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = 8765;
 app.listen(PORT, () => {
   console.log(`🤖 Bot Controller API running on port ${PORT}`);
-  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list`);
+  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*`);
 });
 
 // Graceful shutdown
