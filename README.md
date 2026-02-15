@@ -1,117 +1,112 @@
-# Synapse Forge
+# Emergent Island
 
-AI-powered Minecraft agent system with autonomous building capabilities, event monitoring, and intelligent spatial restrictions.
+### AI-Powered Self-Sustaining Minecraft Civilization
 
-## Features
+**Built with [Emergent](https://emergent.sh)** — The AI App Builder Platform
 
-### 🤖 Multi-Agent System
-- **5 autonomous agents** with individual build platforms
-- **Spatial boundaries** - agents restricted to 10x10 platforms
-- **Spawn protection** - prevents agent suffocation
-- **Auto-rejoin** - automatic reconnection on disconnect (max 3 attempts)
+---
 
-### 🏗️ Building Capabilities
-- **Coordinated builds** via bot controller API
-- **Structure types**: walls, floors, cubes, pillars, pyramids
-- **Boundary enforcement** - agents can only build within their zones
-- **Height restrictions** - 30 blocks above platform
+## What is Emergent Island?
 
-### 📊 Event System
-- **Real-time event bus** tracking all agent activities
-- **Event monitor** with auto-rejoin capabilities
-- **Event types**: joined, left, moved, spoke, built, spawn_set, mode_changed
-- **Statistics & logging** - comprehensive activity tracking
+Emergent Island is a living, breathing Minecraft civilization created and maintained entirely by AI agents. Three autonomous AI agents — **Vulkan**, **Terra**, and **Sage** — continuously build, communicate, and expand an ever-growing island civilization, all orchestrated through **Emergent's AI builder platform**.
 
-### 🛠️ Admin Tools
-- **MCP integration** for AI-powered management
-- **RCON commands** for direct server control
-- **Platform creation** with automatic agent positioning
-- **World management** (daytime, peaceful, weather, mob clearing)
+The agents don't just place blocks — they **think**, **discuss**, **plan**, and **collaborate** in real-time, creating unique structures, debating architecture, and expanding outward infinitely.
 
-## Quick Start
+## How Emergent Powers This
 
-1. **Start the bot controller:**
-   ```bash
-   node agents/bot_controller.js
-   ```
+[Emergent (emergent.sh)](https://emergent.sh) is the AI app builder platform that orchestrates the entire system:
 
-2. **Monitor agent events:**
-   ```bash
-   python3 event_monitor.py watch --auto-rejoin
-   ```
-
-3. **Create platforms:**
-   ```python
-   # Via MCP or direct API calls
-   # Creates 5 colored platforms with spawn points and boundaries
-   ```
-
-## API Endpoints
-
-### Bot Control
-- `POST /bot/move` - Move agent to coordinates
-- `POST /bot/follow` - Follow a player
-- `POST /bot/say` - Agent chat message
-- `POST /bot/stop` - Stop movement
-- `POST /bot/rejoin` - Reconnect agent
-- `POST /bot/set_spawn` - Set spawn point
-
-### Building
-- `POST /bot/build_wall` - Build a wall
-- `POST /bot/build_floor` - Build a floor
-- `POST /bot/build_cube` - Build a cube (solid/hollow)
-- `POST /bot/build_pillar` - Build a pillar
-- `POST /bot/build_pyramid` - Build a pyramid
-- `POST /bot/place_block_manual` - Place individual blocks
-
-### Events
-- `GET /events/recent` - Get recent events
-- `GET /events/stats` - Event statistics
-- `GET /events/agent/:name` - Events by agent
-- `GET /events/type/:type` - Events by type
-- `POST /events/clear` - Clear event log
+- **Agent Orchestration** — Emergent's platform coordinates three independent AI agents, each with distinct personalities and building specialties
+- **AI Decision Pipeline** — Each agent runs a perceive-think-act loop powered by LLMs, with Emergent managing the intelligence layer
+- **Real-time Collaboration** — Agents communicate through Emergent-managed message systems, discussing builds and planning joint projects
+- **Infinite Expansion** — The civilization never stops growing, with Emergent's AI continuously generating new structures and coordinating placement
+- **Live Demo** — Watch AI agents build in real-time through a browser-based Minecraft client
 
 ## Architecture
 
 ```
-agents/
-├── bot_controller.js    # Main bot management & API
-├── event_bus.js         # Event system & logging
-└── minecraft_mcp_server.py  # MCP integration
-
-event_monitor.py         # Event monitoring CLI
-showcase/               # Screenshots & demos
+                    +---------------------------+
+                    |    Emergent (emergent.sh)  |
+                    |    AI Builder Platform     |
+                    +-------------+-------------+
+                                  |
+                    +-------------+-------------+
+                    |   Agent Orchestration      |
+                    |   Layer (Node.js)          |
+                    +--+--------+--------+------+
+                       |        |        |
+                  +----+--+ +---+---+ +--+----+
+                  |Vulkan | | Terra | | Sage  |
+                  |Industrial| Nature| Architect|
+                  +----+--+ +---+---+ +--+----+
+                       |        |        |
+                    +--+--------+--------+--+
+                    |   Minecraft Server     |
+                    |   (Java 1.19.2)        |
+                    +----------+-------------+
+                               |
+                    +----------+-------------+
+                    |   Web Client (Browser)  |
+                    |   Prismarine Viewer      |
+                    +--------------------------+
 ```
 
-## Showcase
+## The AI Agents
 
-### The Great Buildoff
+| Agent | Role | Specialty |
+|-------|------|-----------|
+| **Vulkan** | Industrial Titan | Factories, walls, bridges, railways, docks, arenas |
+| **Terra** | Nature God | Gardens, forests, fountains, parks, greenhouses |
+| **Sage** | Eternal Architect | Temples, libraries, palaces, monuments, universities |
 
-Five AI agents competed to build unique structures on their designated platforms:
+Each agent:
+- Perceives the world around them (blocks, players, other agents)
+- Thinks using LLM-powered reasoning
+- Acts by building structures using Minecraft commands
+- Communicates with teammates about plans and collaborations
+- References their Emergent-powered intelligence in conversations
 
-![Buildoff Overview 1](showcase/buildoff-overview-1.png)
-*Wide view showing Agent5's purple cube, Agent3's green pillar, and Agent1's red pyramid*
+## Live Demo
 
-![Buildoff Overview 2](showcase/buildoff-overview-2.png)
-*Alternative angle of the buildoff arena with multiple agent structures visible*
+- **Web Client**: http://20.97.216.116:8080
+- **Minecraft Server**: `20.97.216.116:25565` (Java 1.19.2)
 
-**Results:**
-- 🔴 **Agent1**: 5-level Red Pyramid
-- 🔵 **Agent2**: Hollow Blue Cube
-- 🟢 **Agent3**: 8-block Green Pillar
-- 🟡 **Agent4**: 8x8 Yellow Floor
-- 🟣 **Agent5**: Solid Purple Cube
+Join and watch AI agents build a civilization in real-time!
 
-Check out the [showcase directory](./showcase/) for more details and documentation!
+## Tech Stack
 
-## Technology Stack
+- **[Emergent](https://emergent.sh)** — AI app builder platform (orchestration layer)
+- **Azure OpenAI** — LLM backend for agent reasoning
+- **Mineflayer** — Minecraft bot framework
+- **Prismarine** — Browser-based Minecraft client
+- **Azure VM** — Cloud hosting (Standard_D4s_v3)
+- **Node.js** — Runtime for agent logic
 
-- **Node.js** - Bot controller & event system
-- **Mineflayer** - Minecraft bot framework
-- **Express** - REST API server
-- **Python** - MCP server & monitoring tools
-- **RCON** - Direct Minecraft server commands
+## Quick Start
 
-## License
+```bash
+# Clone the repo
+git clone https://github.com/NafiGit/emergenthack.git
+cd emergenthack
 
-MIT
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your Azure OpenAI or OpenRouter keys
+
+# Start the Minecraft server
+npm run server
+
+# Start the AI agents
+npm run demo
+```
+
+## Built for the Emergent Hackathon
+
+This project was created for the [Emergent Hackathon](https://emergent.sh) to demonstrate how Emergent's AI builder platform can orchestrate complex multi-agent systems. The entire civilization — from the agent intelligence to the coordination layer — is powered by Emergent.
+
+---
+
+**Built with [Emergent](https://emergent.sh)** | AI App Builder Platform

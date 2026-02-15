@@ -4,9 +4,6 @@ import pathfinderPlugin from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pathfinderPlugin;
 import express from 'express';
 import { Rcon } from 'rcon-client';
-import { Vec3 } from 'vec3';
-import eventBus from './event_bus.js';
-import fs from 'fs';
 
 const app = express();
 app.use(express.json());
@@ -16,80 +13,6 @@ const BOT_NAMES = ['Agent1', 'Agent2', 'Agent3', 'Agent4', 'Agent5'];
 const followTargets = new Map(); // Track who each bot is following
 const botModes = new Map(); // Track each bot's current mode
 const patrolPoints = new Map(); // Track patrol points for each bot
-const reconnectAttempts = new Map(); // Track reconnection attempts
-const MAX_RECONNECT_ATTEMPTS = 3;
-const RECONNECT_DELAY = 5000; // 5 seconds
-const agentBoundaries = new Map(); // Track build boundaries for each agent
-const agentSpawns = new Map(); // Track spawn points for each agent
-
-// Load agent boundaries from file
-function loadBoundaries() {
-  try {
-    const data = fs.readFileSync('/tmp/agent_boundaries.json', 'utf8');
-    const boundaries = JSON.parse(data);
-    boundaries.forEach(b => {
-      agentBoundaries.set(b.agent, {
-        x1: b.x1,
-        z1: b.z1,
-        x2: b.x2,
-        z2: b.z2,
-        y: b.y
-      });
-      agentSpawns.set(b.agent, { x: b.x, y: b.y + 1, z: b.z });
-    });
-    console.log('📏 Loaded boundaries for agents:', Array.from(agentBoundaries.keys()).join(', '));
-  } catch (e) {
-    console.log('⚠️  No boundaries file found');
-  }
-}
-
-// Check if position is within agent's boundaries
-function isWithinBoundaries(botName, x, y, z) {
-  const bounds = agentBoundaries.get(botName);
-  if (!bounds) return true; // No restrictions if no boundaries set
-
-  const maxHeight = bounds.y + 30; // 30 blocks above platform
-  return x >= bounds.x1 && x <= bounds.x2 &&
-         z >= bounds.z1 && z <= bounds.z2 &&
-         y >= bounds.y && y <= maxHeight;
-}
-
-// Check if position is agent's spawn (prevent suffocation)
-function isSpawnProtected(botName, x, y, z) {
-  const spawn = agentSpawns.get(botName);
-  if (!spawn) return false;
-
-  // Protect 2x2x2 area around spawn
-  return Math.abs(x - spawn.x) <= 1 &&
-         Math.abs(y - spawn.y) <= 1 &&
-         Math.abs(z - spawn.z) <= 1;
-}
-
-// Check if entire build area is within boundaries
-function checkBuildArea(botName, x1, y1, z1, x2, y2, z2) {
-  // Check all corners of the build area
-  const corners = [
-    [x1, y1, z1],
-    [x2, y1, z1],
-    [x1, y2, z1],
-    [x2, y2, z1],
-    [x1, y1, z2],
-    [x2, y1, z2],
-    [x1, y2, z2],
-    [x2, y2, z2]
-  ];
-
-  for (const [x, y, z] of corners) {
-    if (!isWithinBoundaries(botName, x, y, z)) {
-      return { valid: false, error: 'Build area extends outside boundaries' };
-    }
-    if (isSpawnProtected(botName, x, y, z)) {
-      return { valid: false, error: 'Build area overlaps spawn protection' };
-    }
-  }
-
-  return { valid: true };
-}
 
 // Create and manage bots
 function createBot(username) {
@@ -102,68 +25,13 @@ function createBot(username) {
 
   bot.loadPlugin(pathfinder);
 
-  bot.on('spawn', async () => {
+  bot.on('spawn', () => {
     console.log(`✅ ${username} joined`);
     bot.movements = new Movements(bot);
-
-    // Reset reconnect attempts on successful join
-    reconnectAttempts.delete(username);
-
-    // Emit join event
-    eventBus.emitAgentJoined(username, bot.entity.position);
-
-    // Give the bot building materials
-    const blocks = [
-      'stone', 'oak_planks', 'diamond_block', 'gold_block',
-      'emerald_block', 'glass', 'quartz_block', 'sandstone'
-    ];
-
-    for (const block of blocks) {
-      try {
-        await executeRCON(`give ${username} ${block} 64`);
-      } catch (e) {
-        // Ignore errors
-      }
-    }
-    console.log(`📦 ${username} equipped with building materials`);
-  });
-
-  bot.on('physicsTick', () => {
-    // Update movements
-    if (bot.pathfinder) {
-      bot.movements = new Movements(bot);
-    }
   });
 
   bot.on('error', (err) => {
     console.log(`❌ ${username} error:`, err.message);
-    eventBus.emitAgentError(username, err);
-  });
-
-  bot.on('end', (reason) => {
-    console.log(`🔌 ${username} disconnected: ${reason}`);
-    eventBus.emitAgentLeft(username, reason);
-
-    // Auto-reconnect logic
-    const attempts = reconnectAttempts.get(username) || 0;
-
-    if (attempts < MAX_RECONNECT_ATTEMPTS) {
-      reconnectAttempts.set(username, attempts + 1);
-      console.log(`🔄 Attempting to reconnect ${username} (attempt ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`);
-
-      setTimeout(() => {
-        try {
-          const newBot = createBot(username);
-          bots.set(username, newBot);
-          eventBus.emitAgentRejoinRequested(username, reason);
-        } catch (e) {
-          console.log(`❌ Failed to reconnect ${username}: ${e.message}`);
-        }
-      }, RECONNECT_DELAY);
-    } else {
-      console.log(`⚠️  ${username} exceeded max reconnect attempts`);
-      reconnectAttempts.delete(username);
-    }
   });
 
   return bot;
@@ -262,7 +130,6 @@ app.post('/bot/say', (req, res) => {
   }
 
   bot.chat(message);
-  eventBus.emitAgentSpoke(bot_name, message);
   res.json({ success: true, message: `${bot_name} said: ${message}` });
 });
 
@@ -470,12 +337,6 @@ app.post('/bot/build_wall', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
-  // Check build area boundaries
-  const areaCheck = checkBuildArea(bot_name, x1, y1, z1, x2, y2, z2);
-  if (!areaCheck.valid) {
-    return res.status(403).json({ error: areaCheck.error });
-  }
-
   try {
     // Move bot near the build location
     const centerX = (x1 + x2) / 2;
@@ -508,18 +369,6 @@ app.post('/bot/build_floor', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
-  // Calculate floor bounds first
-  const x1 = Math.floor(x - width / 2);
-  const x2 = Math.floor(x + width / 2);
-  const z1 = Math.floor(z - length / 2);
-  const z2 = Math.floor(z + length / 2);
-
-  // Check boundaries
-  const areaCheck = checkBuildArea(bot_name, x1, y, z1, x2, y, z2);
-  if (!areaCheck.valid) {
-    return res.status(403).json({ error: areaCheck.error });
-  }
-
   try {
     // Move bot to the location
     const goal = new goals.GoalNear(x, y, z, 3);
@@ -527,6 +376,12 @@ app.post('/bot/build_floor', async (req, res) => {
 
     bot.chat(`Building a floor platform!`);
     await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Calculate floor bounds
+    const x1 = Math.floor(x - width / 2);
+    const x2 = Math.floor(x + width / 2);
+    const z1 = Math.floor(z - length / 2);
+    const z2 = Math.floor(z + length / 2);
 
     const command = `fill ${x1} ${y} ${z1} ${x2} ${y} ${z2} ${block}`;
     const response = await executeRCON(command);
@@ -546,21 +401,6 @@ app.post('/bot/build_cube', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
-  // Calculate bounds first
-  const half = Math.floor(size / 2);
-  const x1 = x - half;
-  const x2 = x + half;
-  const y1 = y;
-  const y2 = y + size - 1;
-  const z1 = z - half;
-  const z2 = z + half;
-
-  // Check boundaries
-  const areaCheck = checkBuildArea(bot_name, x1, y1, z1, x2, y2, z2);
-  if (!areaCheck.valid) {
-    return res.status(403).json({ error: areaCheck.error });
-  }
-
   try {
     const goal = new goals.GoalNear(x, y, z, 3);
     bot.pathfinder.setGoal(goal);
@@ -568,6 +408,14 @@ app.post('/bot/build_cube', async (req, res) => {
     const buildType = hollow ? 'hollow cube' : 'cube';
     bot.chat(`Building a ${buildType}!`);
     await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const half = Math.floor(size / 2);
+    const x1 = x - half;
+    const x2 = x + half;
+    const y1 = y;
+    const y2 = y + size - 1;
+    const z1 = z - half;
+    const z2 = z + half;
 
     const hollowFlag = hollow ? ' hollow' : '';
     const command = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}${hollowFlag}`;
@@ -586,12 +434,6 @@ app.post('/bot/build_pillar', async (req, res) => {
 
   if (!bot) {
     return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  // Check boundaries
-  const areaCheck = checkBuildArea(bot_name, x, y_start, z, x, y_start + height - 1, z);
-  if (!areaCheck.valid) {
-    return res.status(403).json({ error: areaCheck.error });
   }
 
   try {
@@ -620,13 +462,6 @@ app.post('/bot/build_pyramid', async (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
-  // Check boundaries for entire pyramid base
-  const half = Math.floor(size / 2);
-  const areaCheck = checkBuildArea(bot_name, x - half, y, z - half, x + half, y + size - 1, z + half);
-  if (!areaCheck.valid) {
-    return res.status(403).json({ error: areaCheck.error });
-  }
-
   try {
     const goal = new goals.GoalNear(x, y, z, 3);
     bot.pathfinder.setGoal(goal);
@@ -636,11 +471,11 @@ app.post('/bot/build_pyramid', async (req, res) => {
 
     const responses = [];
     for (let level = 0; level < size; level++) {
-      const level_half = Math.floor((size - level) / 2);
-      const x1 = x - level_half;
-      const x2 = x + level_half;
-      const z1 = z - level_half;
-      const z2 = z + level_half;
+      const half = Math.floor((size - level) / 2);
+      const x1 = x - half;
+      const x2 = x + half;
+      const z1 = z - half;
+      const z2 = z + half;
       const y_level = y + level;
 
       const command = `fill ${x1} ${y_level} ${z1} ${x2} ${y_level} ${z2} ${block}`;
@@ -685,474 +520,10 @@ app.post('/bot/clear_area', async (req, res) => {
   }
 });
 
-// Manual block placement endpoint
-app.post('/bot/place_block_manual', async (req, res) => {
-  const { bot_name, x, y, z, block } = req.body;
-  const bot = bots.get(bot_name);
-
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  // Check boundaries
-  if (!isWithinBoundaries(bot_name, x, y, z)) {
-    return res.status(403).json({
-      error: 'Outside build area',
-      message: `${bot_name} can only build within their designated platform`
-    });
-  }
-
-  // Check spawn protection
-  if (isSpawnProtected(bot_name, x, y, z)) {
-    return res.status(403).json({
-      error: 'Spawn protected',
-      message: `Cannot build at spawn point to prevent suffocation`
-    });
-  }
-
-  try {
-    bot.chat(`Placing ${block} at ${x}, ${y}, ${z}`);
-
-    // First, give the bot the blocks via RCON
-    await executeRCON(`give ${bot_name} ${block} 64`);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Move bot near the target position
-    const goal = new goals.GoalNear(x, y, z, 4);
-    bot.pathfinder.setGoal(goal);
-
-    // Wait for bot to get close
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Find the block to place on (reference block)
-    const targetBlock = bot.blockAt(new Vec3(x, y, z));
-    const referenceBlock = bot.blockAt(new Vec3(x, y - 1, z));
-
-    if (!referenceBlock || referenceBlock.name === 'air') {
-      // If there's no block below, place one first
-      await executeRCON(`setblock ${x} ${y - 1} ${z} stone`);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    // Equip the block
-    const item = bot.inventory.items().find(i => i.name === block);
-    if (item) {
-      await bot.equip(item, 'hand');
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Place the block
-      const refBlock = bot.blockAt(new Vec3(x, y - 1, z));
-      if (refBlock) {
-        await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-        bot.chat(`Placed ${block}!`);
-        res.json({ success: true, message: `${bot_name} placed ${block}` });
-      } else {
-        res.status(500).json({ error: 'Could not find reference block' });
-      }
-    } else {
-      res.status(500).json({ error: 'Bot does not have the block' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Build small structure manually
-app.post('/bot/build_manual', async (req, res) => {
-  const { bot_name, structure, x, y, z, block = 'stone' } = req.body;
-  const bot = bots.get(bot_name);
-
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  try {
-    bot.chat(`Building ${structure} manually!`);
-
-    // Give the bot plenty of blocks
-    await executeRCON(`give ${bot_name} ${block} 64`);
-    await executeRCON(`give ${bot_name} ${block} 64`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const blocksPlaced = [];
-
-    if (structure === 'wall') {
-      // Build a small 5-block wall
-      for (let i = 0; i < 5; i++) {
-        const blockX = x + i;
-
-        // Move near the position
-        const goal = new goals.GoalNear(blockX, y, z, 3);
-        bot.pathfinder.setGoal(goal);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Place foundation if needed
-        const groundBlock = bot.blockAt(new Vec3(blockX, y - 1, z));
-        if (!groundBlock || groundBlock.name === 'air') {
-          await executeRCON(`setblock ${blockX} ${y - 1} ${z} stone`);
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        // Equip and place
-        const item = bot.inventory.items().find(item => item.name === block);
-        if (item) {
-          await bot.equip(item, 'hand');
-          const refBlock = bot.blockAt(new Vec3(blockX, y - 1, z));
-          if (refBlock) {
-            await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-            blocksPlaced.push(`(${blockX}, ${y}, ${z})`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
-      }
-    } else if (structure === 'tower') {
-      // Build a small 5-block tower
-      for (let i = 0; i < 5; i++) {
-        const blockY = y + i;
-
-        // Move near the position
-        const goal = new goals.GoalNear(x, blockY, z, 3);
-        bot.pathfinder.setGoal(goal);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Place foundation for first block
-        if (i === 0) {
-          const groundBlock = bot.blockAt(new Vec3(x, y - 1, z));
-          if (!groundBlock || groundBlock.name === 'air') {
-            await executeRCON(`setblock ${x} ${y - 1} ${z} stone`);
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-        }
-
-        // Equip and place
-        const item = bot.inventory.items().find(item => item.name === block);
-        if (item) {
-          await bot.equip(item, 'hand');
-          const refY = i === 0 ? y - 1 : blockY - 1;
-          const refBlock = bot.blockAt(new Vec3(x, refY, z));
-          if (refBlock) {
-            await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-            blocksPlaced.push(`(${x}, ${blockY}, ${z})`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
-      }
-    } else if (structure === 'house') {
-      // Build a tiny 3x3 house
-      const positions = [
-        // Floor
-        [x-1, y, z-1], [x, y, z-1], [x+1, y, z-1],
-        [x-1, y, z], [x, y, z], [x+1, y, z],
-        [x-1, y, z+1], [x, y, z+1], [x+1, y, z+1],
-        // Walls (corners only for speed)
-        [x-1, y+1, z-1], [x+1, y+1, z-1],
-        [x-1, y+1, z+1], [x+1, y+1, z+1],
-      ];
-
-      for (const [bx, by, bz] of positions) {
-        // Move near
-        const goal = new goals.GoalNear(bx, by, bz, 3);
-        bot.pathfinder.setGoal(goal);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Place foundation if needed
-        const groundBlock = bot.blockAt(new Vec3(bx, by - 1, bz));
-        if (!groundBlock || groundBlock.name === 'air') {
-          await executeRCON(`setblock ${bx} ${by - 1} ${bz} stone`);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        // Equip and place
-        const item = bot.inventory.items().find(item => item.name === block);
-        if (item) {
-          await bot.equip(item, 'hand');
-          const refBlock = bot.blockAt(new Vec3(bx, by - 1, bz));
-          if (refBlock) {
-            try {
-              await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-              blocksPlaced.push(`(${bx}, ${by}, ${bz})`);
-            } catch (e) {
-              // Skip if can't place
-            }
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        }
-      }
-    }
-
-    bot.chat(`${structure} complete! Placed ${blocksPlaced.length} blocks.`);
-    res.json({
-      success: true,
-      message: `${bot_name} built ${structure} manually`,
-      blocks_placed: blocksPlaced.length,
-      positions: blocksPlaced
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Event Bus API endpoints
-app.get('/events/recent', (req, res) => {
-  const limit = parseInt(req.query.limit) || 100;
-  res.json(eventBus.getRecentEvents(limit));
-});
-
-app.get('/events/stats', (req, res) => {
-  res.json(eventBus.getStats());
-});
-
-app.get('/events/agent/:name', (req, res) => {
-  const limit = parseInt(req.query.limit) || 100;
-  res.json(eventBus.getEventsByAgent(req.params.name, limit));
-});
-
-app.get('/events/type/:type', (req, res) => {
-  const limit = parseInt(req.query.limit) || 100;
-  res.json(eventBus.getEventsByType(req.params.type, limit));
-});
-
-app.post('/events/clear', (req, res) => {
-  eventBus.clearLog();
-  res.json({ success: true, message: 'Event log cleared' });
-});
-
-// Manual rejoin trigger
-app.post('/bot/rejoin', (req, res) => {
-  const { bot_name } = req.body;
-
-  if (!BOT_NAMES.includes(bot_name)) {
-    return res.status(400).json({ error: 'Invalid bot name' });
-  }
-
-  try {
-    // Disconnect existing bot if present
-    const existingBot = bots.get(bot_name);
-    if (existingBot) {
-      existingBot.quit();
-    }
-
-    // Create new bot
-    setTimeout(() => {
-      const newBot = createBot(bot_name);
-      bots.set(bot_name, newBot);
-      eventBus.emitAgentRejoinRequested(bot_name, 'manual rejoin');
-    }, 1000);
-
-    res.json({ success: true, message: `${bot_name} reconnecting...` });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Set agent spawn point
-app.post('/bot/set_spawn', (req, res) => {
-  const { bot_name, x, y, z } = req.body;
-  const bot = bots.get(bot_name);
-
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  try {
-    const position = {
-      x: x || bot.entity.position.x,
-      y: y || bot.entity.position.y,
-      z: z || bot.entity.position.z
-    };
-
-    // Teleport bot to set spawn (Minecraft sets spawn at current position)
-    bot.chat(`/tp ${bot_name} ${position.x} ${position.y} ${position.z}`);
-
-    // Emit spawn set event
-    eventBus.emitAgentSpawnSet(bot_name, position, 'teleport');
-
-    res.json({
-      success: true,
-      bot: bot_name,
-      spawn: position,
-      message: `Spawn set at (${Math.round(position.x)}, ${Math.round(position.y)}, ${Math.round(position.z)})`
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Mining endpoints
-app.post('/bot/mine_block', async (req, res) => {
-  const { bot_name, x, y, z } = req.body;
-  const bot = bots.get(bot_name);
-
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  try {
-    const targetBlock = bot.blockAt(new Vec3(x, y, z));
-
-    if (!targetBlock || targetBlock.name === 'air') {
-      return res.status(400).json({ error: 'No block at that location' });
-    }
-
-    // Move near the block
-    const goal = new goals.GoalNear(x, y, z, 4);
-    bot.pathfinder.setGoal(goal);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    bot.chat(`Mining ${targetBlock.name}...`);
-
-    // Mine the block
-    await bot.dig(targetBlock);
-
-    eventBus.emit('agent:mined_block', {
-      agent: bot_name,
-      block: targetBlock.name,
-      position: { x, y, z },
-      timestamp: Date.now()
-    });
-
-    bot.chat(`Mined ${targetBlock.name}!`);
-    res.json({
-      success: true,
-      message: `${bot_name} mined ${targetBlock.name}`,
-      block: targetBlock.name
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/bot/mine_area', async (req, res) => {
-  const { bot_name, x1, y1, z1, x2, y2, z2 } = req.body;
-  const bot = bots.get(bot_name);
-
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  // Check boundaries
-  const areaCheck = checkBuildArea(bot_name, x1, y1, z1, x2, y2, z2);
-  if (!areaCheck.valid) {
-    return res.status(403).json({ error: areaCheck.error });
-  }
-
-  try {
-    bot.chat(`Mining area...`);
-
-    const minedBlocks = [];
-    const startX = Math.min(x1, x2);
-    const endX = Math.max(x1, x2);
-    const startY = Math.min(y1, y2);
-    const endY = Math.max(y1, y2);
-    const startZ = Math.min(z1, z2);
-    const endZ = Math.max(z1, z2);
-
-    // Move to mining area
-    const centerX = (startX + endX) / 2;
-    const centerY = (startY + endY) / 2;
-    const centerZ = (startZ + endZ) / 2;
-
-    const goal = new goals.GoalNear(centerX, centerY, centerZ, 3);
-    bot.pathfinder.setGoal(goal);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Mine blocks in the area
-    for (let x = startX; x <= endX; x++) {
-      for (let y = startY; y <= endY; y++) {
-        for (let z = startZ; z <= endZ; z++) {
-          const block = bot.blockAt(new Vec3(x, y, z));
-
-          if (block && block.name !== 'air' && block.name !== 'bedrock') {
-            try {
-              await bot.dig(block);
-              minedBlocks.push(block.name);
-              await new Promise(resolve => setTimeout(resolve, 100));
-            } catch (e) {
-              // Skip if can't mine
-            }
-          }
-        }
-      }
-    }
-
-    bot.chat(`Mining complete! Mined ${minedBlocks.length} blocks.`);
-    res.json({
-      success: true,
-      message: `${bot_name} mined ${minedBlocks.length} blocks`,
-      blocksMined: minedBlocks.length,
-      blocks: [...new Set(minedBlocks)]
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/bot/collect_resources', async (req, res) => {
-  const { bot_name, resource_type, count = 10 } = req.body;
-  const bot = bots.get(bot_name);
-
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-
-  try {
-    bot.chat(`Looking for ${resource_type}...`);
-
-    const collected = [];
-    let attempts = 0;
-    const maxAttempts = count * 5;
-
-    while (collected.length < count && attempts < maxAttempts) {
-      attempts++;
-
-      // Find nearby block of the resource type
-      const block = bot.findBlock({
-        matching: (block) => block.name === resource_type,
-        maxDistance: 32
-      });
-
-      if (block) {
-        // Move near the block
-        const goal = new goals.GoalNear(block.position.x, block.position.y, block.position.z, 4);
-        bot.pathfinder.setGoal(goal);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        try {
-          await bot.dig(block);
-          collected.push(resource_type);
-          await new Promise(resolve => setTimeout(resolve, 200));
-        } catch (e) {
-          // Skip if can't mine
-        }
-      } else {
-        break; // No more blocks found
-      }
-    }
-
-    if (collected.length > 0) {
-      bot.chat(`Collected ${collected.length} ${resource_type}!`);
-      res.json({
-        success: true,
-        message: `${bot_name} collected ${collected.length} ${resource_type}`,
-        collected: collected.length,
-        resource: resource_type
-      });
-    } else {
-      res.status(404).json({ error: `No ${resource_type} found nearby` });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 const PORT = 8765;
 app.listen(PORT, () => {
   console.log(`🤖 Bot Controller API running on port ${PORT}`);
-  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*, /bot/mine_*, /bot/collect_resources, /bot/rejoin, /bot/set_spawn`);
-  console.log(`📊 Event Bus: /events/recent, /events/stats, /events/agent/:name, /events/type/:type`);
-
-  // Load agent boundaries
-  loadBoundaries();
+  console.log(`📡 Endpoints: /bot/move, /bot/follow, /bot/say, /bot/stop, /bot/list, /bot/build_*`);
 });
 
 // Graceful shutdown

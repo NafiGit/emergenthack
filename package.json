@@ -1,9 +1,10 @@
 {
-  "name": "synapse-forge",
+  "name": "base-island",
   "version": "1.0.0",
+  "description": "AI-powered blockchain civilization on Base — blue & white onchain world",
   "type": "module",
   "scripts": {
-    "server": "bash server/start-official-server.sh",
+    "server": "node server/start-server.js",
     "server-flying": "node server/start-server.js",
     "demo": "node src/demo.js",
     "api": "node src/api-server.js"
