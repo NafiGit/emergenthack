@@ -388,7 +388,7 @@ function createArenaBot(def) {
   bot.loadPlugin(pathfinder);
 
   botStats[name] = {
-    arena, attacks: 0, blocks_dug: 0, arrows_shot: 0,
+    arena, attacks: 0, kills: 0, blocks_dug: 0, arrows_shot: 0,
     deaths: 0, tickCount: 0, staleTicks: 0, active: false,
   };
 
@@ -469,7 +469,8 @@ function createArenaBot(def) {
     log(name, `[DEATH] Killed! (death #${botStats[name].deaths}) Respawning in 3s...`);
     botStats[name].active = false;
 
-    // Award win to opponent
+    // Award kill to opponent
+    if (botStats[opponent]) botStats[opponent].kills++;
     try { rcon.send(`scoreboard players add ${opponent} wins 1`); } catch {}
 
     // Kill dropped items nearby to reduce entity spam
@@ -619,7 +620,7 @@ async function main() {
       let totalDeaths = 0;
       let activeFights = 0;
       for (const stats of Object.values(botStats)) {
-        totalKills += stats.attacks;
+        totalKills += stats.kills;
         totalDeaths += stats.deaths;
         if (stats.active) activeFights++;
       }
