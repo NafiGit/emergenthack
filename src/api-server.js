@@ -45,8 +45,20 @@ function createBot(name) {
     console.log(`✅ ${name} connected at ${bot.entity.position}`);
     bots[name.toLowerCase()] = bot;
 
-    // Viewer disabled - using web-client on port 3002 instead
-    console.log(`🎮 View bot at: http://localhost:3002 (connect to server in web client)`);
+    // Attach prismarine-viewer for 3D POV
+    if (mineflayerViewer) {
+      try {
+        mineflayerViewer(bot, { port: 3007, firstPerson: true, viewDistance: 4 });
+        console.log(`🎨 3D Viewer: http://localhost:3007`);
+      } catch (err) {
+        console.log(`⚠️  Viewer failed (non-critical):`, err.message);
+      }
+    }
+    // Set gamemode to survival so we're not stuck in spectator
+    setTimeout(() => {
+      bot.chat('/gamemode survival @s');
+    }, 1000);
+    console.log(`🎮 Game POV: http://localhost:4000/game.html`);
   });
 
   bot.on('error', (err) => console.error(`❌ ${name} error:`, err.message));

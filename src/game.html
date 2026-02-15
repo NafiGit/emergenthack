@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Minecraft POV</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #000;
+      color: #fff;
+      overflow: hidden;
+      cursor: none;
+    }
+    #viewer {
+      width: 100vw;
+      height: 100vh;
+      border: none;
+      display: block;
+    }
+    .hud {
+      position: fixed;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    .crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+    }
+    .crosshair::before,
+    .crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255,255,255,0.8);
+    }
+    .crosshair::before {
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      transform: translateY(-50%);
+    }
+    .crosshair::after {
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      transform: translateX(-50%);
+    }
+    .health-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      display: flex;
+      gap: 3px;
+    }
+    .heart {
+      font-size: 24px;
+      filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8));
+    }
+    .hotbar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 4px;
+      background: rgba(0,0,0,0.5);
+      padding: 5px;
+      border-radius: 5px;
+    }
+    .hotbar-slot {
+      width: 60px;
+      height: 60px;
+      background: rgba(139,69,19,0.6);
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      position: relative;
+    }
+    .hotbar-slot.active {
+      border-color: #fff;
+      background: rgba(139,69,19,0.9);
+      box-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    .hotbar-slot .item-icon {
+      font-size: 20px;
+      margin-bottom: 2px;
+    }
+    .hotbar-slot .item-count {
+      position: absolute;
+      bottom: 2px;
+      right: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 1px 1px 2px #000;
+    }
+    .hotbar-slot .slot-number {
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font-size: 10px;
+      opacity: 0.7;
+    }
+    .info {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .click-to-start {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      padding: 40px;
+      border-radius: 10px;
+      text-align: center;
+      border: 2px solid #fff;
+      pointer-events: all;
+      cursor: pointer;
+      z-index: 2000;
+    }
+    .click-to-start h1 {
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    .click-to-start p {
+      font-size: 14px;
+      opacity: 0.8;
+      margin-top: 10px;
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Click to start screen -->
+  <div class="click-to-start" id="startScreen">
+    <h1>🎮 MINECRAFT POV</h1>
+    <p style="font-size: 18px; margin: 20px 0;">Click to start</p>
+    <p>WASD - Move | Mouse - Look | CTRL - Sprint | SHIFT - Sneak</p>
+    <p>Left Click - Break | Right Click - Place | 1-9 - Select Item | ESC - Menu</p>
+  </div>
+
+  <!-- Game viewer -->
+  <iframe id="viewer" src="http://localhost:3007"></iframe>
+
+  <!-- HUD overlays -->
+  <div class="crosshair hud"></div>
+
+  <div class="info hud">
+    <div id="position">Position: Loading...</div>
+    <div id="lookingAt">Looking at: -</div>
+    <div id="selectedItem">Holding: None</div>
+  </div>
+
+  <div class="health-bar hud" id="healthBar"></div>
+
+  <div class="hotbar hud" id="hotbar">
+    <!-- Will be populated by JS -->
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:4000/api';
+    const BOT_NAME = 'base_bot';
+    let isMouseLocked = false;
+    let lastMouseMove = 0;
+    let selectedSlot = 0;
+    let inventory = [];
+    let pressedKeys = new Set();
+    let isSprinting = false;
+
+    // Start game on click
+    document.getElementById('startScreen').addEventListener('click', () => {
+      document.getElementById('startScreen').classList.add('hidden');
+      document.body.requestPointerLock();
+      updateStatus();
+      setInterval(updateStatus, 1000); // Update every second
+    });
+
+    // Pointer lock handling
+    document.addEventListener('pointerlockchange', () => {
+      isMouseLocked = document.pointerLockElement === document.body;
+    });
+
+    // Mouse look (fast, no throttling for smooth cursor following)
+    document.addEventListener('mousemove', (e) => {
+      if (!isMouseLocked) return;
+
+      if (e.movementX !== 0 || e.movementY !== 0) {
+        fetch(`${API_URL}/${BOT_NAME}/mouselook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deltaX: -e.movementX,  // INVERTED for natural look (right = look right)
+            deltaY: -e.movementY,  // INVERTED for natural look (up = look up)
+            sensitivity: 0.005
+          })
+        }).catch(() => {});
+      }
+    });
+
+    // Mouse click for break/place
+    document.addEventListener('mousedown', (e) => {
+      if (!isMouseLocked) return;
+
+      if (e.button === 0) {
+        // Left click - break block
+        breakBlock();
+      } else if (e.button === 2) {
+        // Right click - place block
+        placeBlock();
+      }
+    });
+
+    // Prevent context menu
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      if (!isMouseLocked) return;
+
+      const key = e.key.toLowerCase();
+
+      // Number keys for hotbar selection
+      if (key >= '1' && key <= '9') {
+        selectedSlot = parseInt(key) - 1;
+        updateHotbar();
+        return;
+      }
+
+      // ESC to unlock
+      if (key === 'escape') {
+        document.exitPointerLock();
+        return;
+      }
+
+      // Prevent repeated keydown
+      if (pressedKeys.has(key)) return;
+      pressedKeys.add(key);
+
+      // Movement keys
+      if (key === 'w') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'forward', active: true })
+        }).catch(() => {});
+      } else if (key === 's') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'back', active: true })
+        }).catch(() => {});
+      } else if (key === 'a') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'left', active: true })
+        }).catch(() => {});
+      } else if (key === 'd') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'right', active: true })
+        }).catch(() => {});
+      } else if (key === ' ') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'jump', active: true })
+        }).catch(() => {});
+        setTimeout(() => {
+          fetch(`${API_URL}/${BOT_NAME}/control`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: 'jump', active: false })
+          }).catch(() => {});
+        }, 100);
+      } else if (key === 'shift') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'sneak', active: true })
+        }).catch(() => {});
+      } else if (key === 'control') {
+        // Sprint
+        isSprinting = true;
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'sprint', active: true })
+        }).catch(() => {});
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (!isMouseLocked) return;
+
+      const key = e.key.toLowerCase();
+      pressedKeys.delete(key);
+
+      if (key === 'w') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'forward', active: false })
+        }).catch(() => {});
+      } else if (key === 's') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'back', active: false })
+        }).catch(() => {});
+      } else if (key === 'a') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'left', active: false })
+        }).catch(() => {});
+      } else if (key === 'd') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'right', active: false })
+        }).catch(() => {});
+      } else if (key === 'shift') {
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'sneak', active: false })
+        }).catch(() => {});
+      } else if (key === 'control') {
+        // Stop sprinting
+        isSprinting = false;
+        fetch(`${API_URL}/${BOT_NAME}/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'sprint', active: false })
+        }).catch(() => {});
+      }
+    });
+
+    // Game actions
+    async function breakBlock() {
+      try {
+        await fetch(`${API_URL}/${BOT_NAME}/break`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        updateStatus(); // Refresh inventory
+      } catch (error) {
+        console.error('Error breaking block:', error);
+      }
+    }
+
+    async function placeBlock() {
+      try {
+        await fetch(`${API_URL}/${BOT_NAME}/place`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slot: selectedSlot })
+        });
+        updateStatus(); // Refresh inventory
+      } catch (error) {
+        console.error('Error placing block:', error);
+      }
+    }
+
+    // Update game status
+    async function updateStatus() {
+      try {
+        const response = await fetch(`${API_URL}/${BOT_NAME}/status`);
+        const data = await response.json();
+
+        // Update position
+        const pos = data.position;
+        document.getElementById('position').textContent =
+          `Position: (${Math.floor(pos.x)}, ${Math.floor(pos.y)}, ${Math.floor(pos.z)})`;
+
+        // Update looking at
+        if (data.lookingAt) {
+          document.getElementById('lookingAt').textContent =
+            `Looking at: ${data.lookingAt.name || 'Block'} (${data.lookingAt.position.x}, ${data.lookingAt.position.y}, ${data.lookingAt.position.z})`;
+        } else {
+          document.getElementById('lookingAt').textContent = 'Looking at: Air';
+        }
+
+        // Update health
+        const healthBar = document.getElementById('healthBar');
+        healthBar.innerHTML = '';
+        const maxHearts = 10;
+        const fullHearts = Math.floor(data.health / 2);
+        for (let i = 0; i < maxHearts; i++) {
+          const heart = document.createElement('span');
+          heart.className = 'heart';
+          heart.textContent = i < fullHearts ? '❤️' : '🖤';
+          heart.style.opacity = i < fullHearts ? '1' : '0.3';
+          healthBar.appendChild(heart);
+        }
+
+        // Update inventory
+        inventory = data.inventory || [];
+        updateHotbar();
+
+      } catch (error) {
+        console.error('Error updating status:', error);
+      }
+    }
+
+    function updateHotbar() {
+      const hotbar = document.getElementById('hotbar');
+      hotbar.innerHTML = '';
+
+      for (let i = 0; i < 9; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'hotbar-slot';
+        if (i === selectedSlot) slot.classList.add('active');
+
+        const slotNumber = document.createElement('span');
+        slotNumber.className = 'slot-number';
+        slotNumber.textContent = i + 1;
+        slot.appendChild(slotNumber);
+
+        const item = inventory.find(inv => inv.slot >= 36 && inv.slot <= 44 && inv.slot - 36 === i);
+        if (item) {
+          const icon = document.createElement('div');
+          icon.className = 'item-icon';
+          icon.textContent = getItemIcon(item.name);
+          slot.appendChild(icon);
+
+          const count = document.createElement('span');
+          count.className = 'item-count';
+          count.textContent = item.count > 1 ? item.count : '';
+          slot.appendChild(count);
+
+          const name = document.createElement('div');
+          name.textContent = item.name.replace(/_/g, ' ').substring(0, 8);
+          name.style.fontSize = '8px';
+          slot.appendChild(name);
+        }
+
+        hotbar.appendChild(slot);
+      }
+
+      // Update selected item display
+      const selectedItem = inventory.find(inv => inv.slot >= 36 && inv.slot <= 44 && inv.slot - 36 === selectedSlot);
+      if (selectedItem) {
+        document.getElementById('selectedItem').textContent =
+          `Holding: ${selectedItem.name.replace(/_/g, ' ')} (${selectedItem.count})`;
+      } else {
+        document.getElementById('selectedItem').textContent = 'Holding: None';
+      }
+    }
+
+    function getItemIcon(itemName) {
+      const icons = {
+        'dirt': '🟫',
+        'stone': '⬜',
+        'cobblestone': '⚫',
+        'wooden_pickaxe': '⛏️',
+        'stone_pickaxe': '⛏️',
+        'iron_pickaxe': '⛏️',
+        'diamond_pickaxe': '💎',
+        'oak_log': '🪵',
+        'oak_planks': '🪵',
+        'stick': '🥢',
+        'coal': '⚫',
+        'iron_ore': '⬜',
+        'diamond': '💎'
+      };
+      return icons[itemName] || '📦';
+    }
+  </script>
+</body>
+</html>

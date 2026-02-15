@@ -47,6 +47,20 @@ serverProcess.stdout.on('data', (data) => {
     console.log('\nWaiting for agents to join...\n');
   }
 
+  // Auto-op agents when they join
+  if (line.includes('joined the game')) {
+    const match = line.match(/(\w+) joined the game/);
+    if (match) {
+      const name = match[1];
+      if (['Saumya', 'Sumedha', 'Ahaan'].includes(name)) {
+        setTimeout(() => {
+          serverProcess.stdin.write(`op ${name}\n`);
+          console.log(`🔑 Auto-opped agent: ${name}`);
+        }, 1000);
+      }
+    }
+  }
+
   // Detect player joins/leaves
   if (line.includes('joined the game')) {
     const match = line.match(/(\w+) joined the game/);

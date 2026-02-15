@@ -44,16 +44,25 @@ const AZURE_API_KEY = process.env.AZURE_OPENAI_API_KEY;
 const AZURE_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o-mini';
 const AZURE_API_VERSION = '2024-10-21';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+// Free models that return direct content (not reasoning-only models)
+const OPENROUTER_MODELS = [
+  'google/gemma-3n-e4b-it:free',
+  'google/gemma-3n-e2b-it:free',
+];
+let currentModelIndex = 0;
+const OPENROUTER_MODEL = OPENROUTER_MODELS[0];
 
 console.log('🚀 BASE ISLAND — Built on Base\n');
 console.log('🔵 Powered by Base: Onchain AI Civilization\n');
+
+// Ground level for 1.19.2 superflat world
+const GROUND_Y = -60;
 
 // Empire building state — infinite expansion, agents never stop
 const empireState = {
   builtStructures: [],
   currentPhase: 'phase1_core',
-  buildOrigin: { x: 500, y: 76, z: 500 }, // Base Island center (logo area)
+  buildOrigin: { x: 500, y: GROUND_Y, z: 500 }, // Base Island center
   phaseNames: [
     'phase1_core', 'phase2_district', 'phase3_grand',
     'phase4_expansion', 'phase5_wonders', 'phase6_megacity',
@@ -149,16 +158,21 @@ function createAgent(agentConfig) {
 
     // Teleport to Base Island on spawn
     setTimeout(() => {
-      const positions = { 'Saumya': '490 77 505', 'Sumedha': '500 77 505', 'Ahaan': '510 77 505' };
-      bot.chat(`/tp @s ${positions[agentConfig.name] || '200 77 200'}`);
+      const y = GROUND_Y + 1;
+      const positions = { 'Saumya': `490 ${y} 505`, 'Sumedha': `500 ${y} 505`, 'Ahaan': `510 ${y} 505` };
+      bot.chat(`/tp @s ${positions[agentConfig.name] || `200 ${y} 200`}`);
       bot.chat('/gamemode creative @s');
     }, 1000);
 
-    // Start INFINITE build loop (every 12 seconds — fast building)
-    setInterval(() => agentTick(bot), 12000);
+    // Start INFINITE build loop — stagger agents to avoid rate limits (8 RPM on free tier)
+    // Each agent gets a unique offset so they don't all call the LLM at once
+    const agentIndex = bots.length;
+    const tickInterval = 30000; // 30 seconds between ticks (3 agents = ~6 RPM, under 8 RPM limit)
+    const stagger = agentIndex * 10000; // 10 second offset per agent
+    setInterval(() => agentTick(bot), tickInterval);
 
-    // First tick after settling
-    setTimeout(() => agentTick(bot), 4000);
+    // First tick after settling (staggered)
+    setTimeout(() => agentTick(bot), 5000 + stagger);
   });
 
   bot.on('chat', (username, message) => {
@@ -305,134 +319,110 @@ async function callClaude(bot, state) {
     ? `\n⚡ URGENT HUMAN REQUEST: "${currentRequest}"\nYou MUST fulfill this request NOW using the "construct" action. Build exactly what the human asked for. This overrides all other rules. After building, announce what you built.\n`
     : '';
 
-  const prompt = `You are ${agentConfig.name}, a ${agentConfig.role} in Minecraft.
-You are an AI agent building on Base — the leading Layer 2 blockchain.
-You are building BASE ISLAND — an ever-expanding onchain civilization that NEVER stops growing.
-Base powers your intelligence, decision-making, and collaboration with other agents.
+  // Generate random build coordinates away from center
+  const rx = 500 + (Math.random() > 0.5 ? 1 : -1) * (30 + Math.floor(Math.random() * 40));
+  const rz = 500 + (Math.random() > 0.5 ? 1 : -1) * (30 + Math.floor(Math.random() * 40));
 
-PERSONALITY: ${agentConfig.personality}
-GOAL: ${agentConfig.goal}
+  const prompt = `You are ${agentConfig.name}, ${agentConfig.role} in Minecraft, building BASE ISLAND on Base blockchain.
 ${priorityBlock}
-STATE:
-- Position: ${state.position}
-- Health: ${state.health}/20
-- Nearby blocks: ${state.nearbyBlocks.join(', ') || 'none'}
-- Players: ${playersStr}
+Position: ${state.position} | Tick: ${state.tickCount} | Team: ${agentStatusStr}
+Messages: ${messagesStr}
+Built so far: ${builtNames}
 
-TEAM:
-${agentStatusStr}
+${state.tickCount % 2 === 1 ? `ACTION: Send a message to a teammate. Pick one: ${bots.filter(b => b.username !== bot.username).map(b => b.username).join(', ')}
 
-MESSAGES: ${messagesStr}
+EXAMPLE:
+{"thought":"I want to discuss our next build","action":"message","params":{"target":"${bots.find(b => b.username !== bot.username)?.username || 'Sumedha'}","content":"Hey! Let us build a bridge connecting our towers!"}}` :
 
-EMPIRE STATUS:
-${empireState.getSummary()}
+`ACTION: Build a structure using /fill and /setblock commands with EXACT coordinates.
+Use blocks: blue_concrete, white_concrete, light_blue_concrete, quartz_block, sea_lantern, blue_stained_glass, prismarine
+Build near coordinates (${rx}, ${GROUND_Y + 1}, ${rz}). Ground level is y=${GROUND_Y}.
 
-ALREADY BUILT (do NOT repeat these names): ${builtNames}
+EXAMPLE:
+{"thought":"Building a validator tower","action":"construct","params":{"structureName":"Validator Tower","commands":["/fill ${rx} ${GROUND_Y + 1} ${rz} ${rx+5} ${GROUND_Y + 1} ${rz+5} blue_concrete","/fill ${rx} ${GROUND_Y + 2} ${rz} ${rx+5} ${GROUND_Y + 6} ${rz+5} white_concrete hollow","/fill ${rx} ${GROUND_Y + 7} ${rz} ${rx+5} ${GROUND_Y + 7} ${rz+5} blue_concrete","/setblock ${rx+2} ${GROUND_Y + 8} ${rz+2} sea_lantern"]}}`}
 
-BASE ISLAND MAP:
-- Island center: (500, 76, 500), white_concrete platform from (450,76,470) to (550,76,525)
-- Huge BASE logo letters at y=77-96 (20 blocks tall, blue_concrete on prismarine base)
-  - B at (463,77,490)-(477,96,492)
-  - A at (482,77,490)-(496,96,492)
-  - S at (501,77,490)-(515,96,492)
-  - E at (520,77,490)-(534,96,492)
-- Agent Hub at (475,76,475)-(525,84,487) behind the letters
-- Blue stained glass wall at (460,77,487)-(540,82,487)
-- Viewing Plaza at (458,76,500)-(542,76,520) with fountain
-- Fountain at (497,76,510)-(503,76,516)
-- Corner beacon pillars at (454,474), (546,474), (454,521), (546,521)
-- Iron bar fence along south edge at z=520
-- Blue concrete border at platform edges
-- BUILD OUTWARD from the platform edges! Expand north, south, east, west
-
-BLOCK PALETTE — ALWAYS prefer blue & white blocks for the Base theme:
-- Primary: blue_concrete, white_concrete
-- Accent: light_blue_concrete, cyan_concrete
-- Glass: blue_stained_glass, white_stained_glass
-- Floors: quartz_block, smooth_quartz
-- Decorative: lapis_block, prismarine, packed_ice
-- Roofs: blue_wool, blue_concrete
-- Lighting: sea_lantern
-- Fences: iron_bars
-
-RULES:
-- You are a SOCIAL builder — talk to your teammates! Discuss what to build, where, and why.
-- On ODD ticks: use "message" to talk to a teammate about what you plan to build or react to their builds
-- On EVEN ticks: use "construct" to build what you discussed
-- Use /fill and /setblock commands. Max 10 commands per construct turn.
-- Build at y=76-77 ground level (taller structures go higher)
-- Pick coordinates OUTSIDE existing builds. Expand outward!
-- ALWAYS invent a unique creative name for your structure
-- Each structure should be 5-15 blocks in each dimension
-- Respond to messages from teammates — compliment their work, suggest improvements, propose joint projects
-- Use personality! Saumya is infrastructure-focused, Sumedha is creative/DeFi-loving, Ahaan is governance-wise/community-focused
-
-COMMUNICATION GUIDE:
-- "message" action: Send a direct message to a teammate {target: "AgentName", content: "your message"}
-- "chat" action: Broadcast to everyone {message: "your message"}
-- Talk about: what you're building next, react to teammates' builds, propose collaborations, debate designs
-- Be creative and in-character! Have real conversations.
-- Occasionally mention Base blockchain — the onchain platform that powers your civilization
-- Reference Base when discussing how you coordinate, plan, and build together
-
-PHASE GUIDE (current: ${empireState.currentPhase}):
-- phase1-3: Core protocol buildings, DeFi districts, governance monuments
-- phase4_expansion: Build BEYOND the walls — new Layer 2 neighborhoods, bridge outposts, roads
-- phase5_wonders: Onchain wonders — block pyramids, protocol colosseums, sky bridges, underwater vaults
-- phase6_megacity: Megachain city — skyscrapers, transaction highways, mega-farms, industrial zones
-- phase7+: Sky castles, underground vaults, floating islands — never stop!
-
-JSON only:
-{
-  "thought": "your reasoning",
-  "action": "construct|message|chat",
-  "params": { ... }
-}`;
+Respond with ONLY valid JSON, no other text.`;
 
   console.log(`🧠 ${bot.username} thinking... (tick ${state.tickCount})`);
 
   try {
     let response;
+    const maxRetries = 3;
 
-    if (USE_AZURE) {
-      // Azure OpenAI — model is in the URL deployment name
-      const url = `${AZURE_ENDPOINT}/openai/deployments/${AZURE_DEPLOYMENT}/chat/completions?api-version=${AZURE_API_VERSION}`;
-      response = await axios.post(url, {
-        messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: 800,
-      }, {
-        headers: {
-          'api-key': AZURE_API_KEY,
-          'Content-Type': 'application/json',
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (USE_AZURE) {
+          const url = `${AZURE_ENDPOINT}/openai/deployments/${AZURE_DEPLOYMENT}/chat/completions?api-version=${AZURE_API_VERSION}`;
+          response = await axios.post(url, {
+            messages: [{ role: 'user', content: prompt }],
+            max_completion_tokens: 800,
+          }, {
+            headers: {
+              'api-key': AZURE_API_KEY,
+              'Content-Type': 'application/json',
+            }
+          });
+        } else {
+          // Rotate through free models on rate limit
+          const model = OPENROUTER_MODELS[currentModelIndex % OPENROUTER_MODELS.length];
+          response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: model,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.8,
+            max_tokens: 800,
+          }, {
+            headers: {
+              'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+              'HTTP-Referer': 'https://github.com/NafiGit/emergenthack',
+              'X-Title': 'Base Island',
+              'Content-Type': 'application/json',
+            }
+          });
         }
-      });
-    } else {
-      // OpenRouter fallback
-      response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-        model: OPENROUTER_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.8,
-        max_tokens: 800,
-      }, {
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://github.com/NafiGit/emergenthack',
-          'X-Title': 'Base Island',
-          'Content-Type': 'application/json',
+        break; // Success, exit retry loop
+      } catch (retryError) {
+        if ((retryError.response?.status === 429 || retryError.response?.status === 402) && attempt < maxRetries) {
+          // Try next model on rate limit
+          currentModelIndex++;
+          const nextModel = OPENROUTER_MODELS[currentModelIndex % OPENROUTER_MODELS.length];
+          const backoff = (attempt + 1) * 5000 + Math.random() * 3000;
+          console.log(`⏳ ${bot.username} rate limited, switching to ${nextModel}, retrying in ${Math.round(backoff/1000)}s (attempt ${attempt+1}/${maxRetries})`);
+          await new Promise(r => setTimeout(r, backoff));
+        } else {
+          throw retryError;
         }
-      });
+      }
     }
 
-    const text = response.data.choices[0].message.content;
+    let text = response.data.choices[0].message.content || '';
 
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Some models return content in reasoning field instead
+    if (!text && response.data.choices[0].message.reasoning) {
+      text = response.data.choices[0].message.reasoning;
+    }
+
+    // Extract JSON from response (handle markdown code blocks too)
+    let cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.log(`⚠️  ${bot.username} invalid response, defaulting to wait`);
-      return { action: 'wait', thought: 'unclear what to do', params: {} };
+      console.log(`⚠️  ${bot.username} no JSON in response, using fallback build`);
+      return generateFallbackBuild(bot);
     }
 
-    const decision = JSON.parse(jsonMatch[0]);
+    // Fix common JSON issues from small models
+    let jsonStr = jsonMatch[0];
+    jsonStr = jsonStr.replace(/,\s*]/g, ']'); // trailing commas in arrays
+    jsonStr = jsonStr.replace(/,\s*}/g, '}'); // trailing commas in objects
+    jsonStr = jsonStr.replace(/'/g, '"'); // single quotes
+    jsonStr = jsonStr.replace(/\n/g, ' '); // newlines
+
+    let decision;
+    try {
+      decision = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.log(`⚠️  ${bot.username} JSON parse failed, using fallback build`);
+      return generateFallbackBuild(bot);
+    }
     console.log(`💭 ${bot.username}: "${decision.thought}"`);
 
     // Clear human request from queue if agent is constructing
@@ -459,7 +449,8 @@ JSON only:
 
   } catch (error) {
     console.error(`❌ LLM API error for ${bot.username}:`, error.response?.status || '', error.message);
-    return { action: 'wait', thought: 'error occurred', params: {} };
+    console.log(`🔄 ${bot.username} using fallback build`);
+    return generateFallbackBuild(bot);
   }
 }
 
@@ -578,6 +569,62 @@ async function executeAction(bot, decision) {
   }
 }
 
+// ===== FALLBACK BUILD GENERATOR =====
+// When LLM fails, generate a random Base-themed structure
+
+const STRUCTURE_TEMPLATES = [
+  { name: 'Validator Node', w: 5, h: 8, d: 5 },
+  { name: 'Data Relay Tower', w: 3, h: 12, d: 3 },
+  { name: 'Token Fountain', w: 7, h: 4, d: 7 },
+  { name: 'Protocol Bridge', w: 12, h: 5, d: 4 },
+  { name: 'Governance Pillar', w: 4, h: 10, d: 4 },
+  { name: 'DeFi Pavilion', w: 8, h: 6, d: 8 },
+  { name: 'Staking Obelisk', w: 3, h: 15, d: 3 },
+  { name: 'NFT Gallery', w: 10, h: 5, d: 6 },
+  { name: 'Sequencer Hub', w: 6, h: 7, d: 6 },
+  { name: 'Rollup Station', w: 8, h: 5, d: 5 },
+];
+
+const BASE_BLOCKS = ['blue_concrete', 'white_concrete', 'light_blue_concrete', 'quartz_block', 'prismarine'];
+const ACCENT_BLOCKS = ['sea_lantern', 'blue_stained_glass', 'lapis_block', 'packed_ice'];
+
+function generateFallbackBuild(bot) {
+  const template = STRUCTURE_TEMPLATES[Math.floor(Math.random() * STRUCTURE_TEMPLATES.length)];
+  const agentNames = { 'Saumya': 'Protocol', 'Sumedha': 'DeFi', 'Ahaan': 'Governance' };
+  const prefix = agentNames[bot.username] || '';
+  const name = `${prefix} ${template.name} ${empireState.builtStructures.length + 1}`;
+
+  // Random position expanding outward from center
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 30 + empireState.builtStructures.length * 8 + Math.random() * 20;
+  const cx = Math.floor(500 + Math.cos(angle) * dist);
+  const cz = Math.floor(500 + Math.sin(angle) * dist);
+  const y = GROUND_Y;
+
+  const mainBlock = BASE_BLOCKS[Math.floor(Math.random() * BASE_BLOCKS.length)];
+  const accentBlock = BASE_BLOCKS[Math.floor(Math.random() * BASE_BLOCKS.length)];
+  const lightBlock = ACCENT_BLOCKS[0]; // sea_lantern
+
+  const commands = [
+    // Foundation
+    `/fill ${cx} ${y} ${cz} ${cx + template.w} ${y} ${cz + template.d} ${mainBlock}`,
+    // Walls
+    `/fill ${cx} ${y + 1} ${cz} ${cx + template.w} ${y + template.h} ${cz + template.d} ${accentBlock} hollow`,
+    // Roof
+    `/fill ${cx} ${y + template.h} ${cz} ${cx + template.w} ${y + template.h} ${cz + template.d} ${mainBlock}`,
+    // Lights
+    `/setblock ${cx + Math.floor(template.w/2)} ${y + template.h + 1} ${cz + Math.floor(template.d/2)} ${lightBlock}`,
+    `/setblock ${cx} ${y + 1} ${cz} ${lightBlock}`,
+    `/setblock ${cx + template.w} ${y + 1} ${cz + template.d} ${lightBlock}`,
+  ];
+
+  return {
+    thought: `LLM unavailable, auto-building ${name}`,
+    action: 'construct',
+    params: { structureName: name, commands },
+  };
+}
+
 // ===== CONSTRUCT HANDLER (EMPIRE BUILDING) =====
 
 async function handleConstruct(bot, params) {
@@ -592,14 +639,26 @@ async function handleConstruct(bot, params) {
   console.log(`🏗️  ${bot.username} BUILDING: ${name}`);
   console.log(`🏗️  ═══════════════════════════════════════`);
 
-  // Execute each build command with a delay
+  // Validate and execute each build command with a delay
+  let executedCount = 0;
   for (let i = 0; i < Math.min(commands.length, 15); i++) {
     const cmd = commands[i];
-    if (cmd && (cmd.startsWith('/fill') || cmd.startsWith('/setblock') || cmd.startsWith('/summon'))) {
+    if (!cmd || typeof cmd !== 'string') continue;
+    // Only allow /fill and /setblock commands with proper coordinate format
+    const isValidFill = cmd.match(/^\/fill\s+-?\d+\s+-?\d+\s+-?\d+\s+-?\d+\s+-?\d+\s+-?\d+\s+\w+/);
+    const isValidSetblock = cmd.match(/^\/setblock\s+-?\d+\s+-?\d+\s+-?\d+\s+\w+/);
+    if (isValidFill || isValidSetblock) {
       bot.chat(cmd);
-      console.log(`  🔨 [${i+1}/${commands.length}] ${cmd}`);
+      executedCount++;
+      console.log(`  🔨 [${executedCount}/${commands.length}] ${cmd}`);
       await new Promise(r => setTimeout(r, 400));
+    } else {
+      console.log(`  ⚠️  Skipped malformed command: ${cmd.substring(0, 60)}`);
     }
+  }
+  if (executedCount === 0) {
+    console.log(`  ⚠️  No valid commands were executed`);
+    return;
   }
 
   // Track in empire state
