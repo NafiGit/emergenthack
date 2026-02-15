@@ -1,0 +1,14 @@
+{
+  "arena": "sumo",
+  "theme": "Sumo Knockback Arena",
+  "center": { "x": 55, "z": 0 },
+  "bounds": { "x1": 43, "x2": 67, "z1": -12, "z2": 12 },
+  "spawn": { "x": 55, "y": 11, "z": 0 },
+  "ground_y": 3,
+  "platform_y": 10,
+  "screenshot_pos": { "x": 55, "y": 35, "z": 0 },
+  "viewer_port": 3011,
+  "items": ["stick"],
+  "current_blocks": ["blue_concrete", "packed_ice"],
+  "notes": "East of hub. Elevated circular platform, void/water below. Needs interesting platform shape."
+}

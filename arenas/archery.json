@@ -1,0 +1,14 @@
+{
+  "arena": "archery",
+  "theme": "Archery Range Arena",
+  "center": { "x": 0, "z": -55 },
+  "bounds": { "x1": -14, "x2": 14, "z1": -62, "z2": -48 },
+  "spawn": { "x": 0, "y": 4, "z": -55 },
+  "ground_y": 3,
+  "build_y": 4,
+  "screenshot_pos": { "x": 0, "y": 35, "z": -55 },
+  "viewer_port": 3013,
+  "items": ["bow", "arrow x64", "leather_chestplate"],
+  "current_blocks": ["yellow_concrete", "hay_block", "target"],
+  "notes": "North of hub. Flat open field. Needs cover walls, elevation changes, sniper perches, moving cover."
+}
