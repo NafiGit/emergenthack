@@ -575,6 +575,8 @@ function setSpawn() {
     `gamerule doImmediateRespawn true`,
     `gamerule keepInventory true`,
     `gamerule showDeathMessages false`,
+    `gamerule commandBlockOutput false`,
+    `gamerule sendCommandFeedback false`,
   ];
 }
 
