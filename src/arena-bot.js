@@ -2,6 +2,7 @@
 // Only 2 bots connect per arena at a time (the active fighters)
 // After each match, fighters disconnect and the next pair spawns in
 
+import 'dotenv/config';
 import mineflayer from 'mineflayer';
 import pkg from 'mineflayer-pathfinder';
 const { pathfinder, Movements, goals } = pkg;
@@ -10,6 +11,7 @@ import { Rcon } from 'rcon-client';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { chainBridge } from './chain-bridge.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -246,6 +248,20 @@ async function arenaGameLoop(arena) {
       await sleep(1000);
     }
 
+    // ── ON-CHAIN: record match creation ──
+    let chainGame = null;
+    try {
+      chainGame = await chainBridge.createMatchGame(arena, fighter1.name, fighter2.name);
+      if (chainGame) {
+        const shortHash = chainGame.txHash.slice(0, 10) + '...' + chainGame.txHash.slice(-6);
+        try {
+          await rcon.send(`say [MONAD] ${arena.toUpperCase()} Match #${match.matchNum} recorded on-chain (Game #${chainGame.gameId}) TX: ${shortHash}`);
+        } catch {}
+      }
+    } catch (e) {
+      console.log(`[CHAIN] Error creating on-chain match: ${e.message}`);
+    }
+
     // ── BETTING: open betting for gallery spectators ──
     match.state = 'BETTING';
     bettingOpen[arena] = true;
@@ -379,7 +395,37 @@ async function arenaGameLoop(arena) {
       if (botStats[result.winner]) botStats[result.winner].kills++;
     }
 
+    // Snapshot bets before payout clears them
+    const betsSnapshot = { ...activeBets[arena] };
     await processBetPayouts(arena, result.winner);
+
+    // ── ON-CHAIN: record winner + reward bettors ──
+    try {
+      if (chainGame && result.winner) {
+        // Attempt to record winner on-chain (may fail if contract needs joined players)
+        const winnerWallet = chainBridge.getWallet(result.winner);
+        if (winnerWallet) {
+          await chainBridge.recordWinner(chainGame.gameId, winnerWallet);
+        }
+
+        // Reward winning bettors who have registered wallets
+        const winningBettors = Object.entries(betsSnapshot)
+          .filter(([, b]) => b.bot === result.winner)
+          .map(([p]) => p);
+        if (winningBettors.length > 0) {
+          const rewards = await chainBridge.rewardBettors(winningBettors);
+          for (const r of rewards) {
+            const shortHash = r.txHash.slice(0, 10) + '...' + r.txHash.slice(-6);
+            try { await rcon.send(`tell ${r.player} [MONAD] Rewarded ${r.amount} MON! TX: ${shortHash}`); } catch {}
+          }
+          if (rewards.length > 0) {
+            try { await rcon.send(`say [MONAD] ${rewards.length} bettor(s) rewarded with ${chainBridge.rewardAmount} MON each!`); } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[CHAIN] Error in post-match chain ops: ${e.message}`);
+    }
 
     await sleep(3000);
     try { await rcon.send(`title @a[tag=bettor_${arena}] title {"text":"Returning to Hub","color":"aqua"}`); } catch {}
@@ -527,6 +573,25 @@ async function showBalance(playerName) {
     try { await rcon.send(`scoreboard players set ${playerName} coins ${STARTING_COINS}`); } catch {}
   }
   try { await rcon.send(`tell ${playerName} Balance: ${playerCoins[playerName]} coins`); } catch {}
+}
+
+async function handleWalletRegister(playerName, message) {
+  const parts = message.split(' ').filter(Boolean);
+  if (parts.length < 2) {
+    try { await rcon.send(`tell ${playerName} Usage: !wallet <ETH-address> (e.g. !wallet 0xABC...)`); } catch {}
+    return;
+  }
+  const address = parts[1];
+  const result = chainBridge.registerWallet(playerName, address);
+  if (result.success) {
+    try {
+      await rcon.send(`tell ${playerName} Wallet registered! ${result.address.slice(0, 6)}...${result.address.slice(-4)}`);
+      await rcon.send(`tell ${playerName} You'll now receive MON rewards when you win bets!`);
+    } catch {}
+    console.log(`[CHAIN] ${playerName} registered wallet: ${result.address}`);
+  } else {
+    try { await rcon.send(`tell ${playerName} Invalid wallet address. Must be a valid ETH address (0x...)`); } catch {}
+  }
 }
 
 async function processBetPayouts(arena, winner) {
@@ -1063,7 +1128,7 @@ function spawnFighter(def) {
       botStats[name].active = false;
       botInstances[name] = bot;
 
-      // Chat listener — !bet (legacy) and !coins
+      // Chat listener — !bet (legacy), !coins, !wallet
       bot.on('chat', (username, msg) => {
         if (BOT_DEFS.some(d => d.name === username)) return;
         const key = `${username}:${msg}:${Math.floor(Date.now() / 1000)}`;
@@ -1072,6 +1137,7 @@ function spawnFighter(def) {
         setTimeout(() => chatDedup.delete(key), 2000);
         if (msg.startsWith('!bet')) handleBet(username, msg);
         else if (msg === '!coins' || msg === '!balance') showBalance(username);
+        else if (msg.startsWith('!wallet')) handleWalletRegister(username, msg);
       });
 
       // GUI betting — whisper handler for clickable tellraw (1v1: choice 1 or 2)
@@ -1211,6 +1277,10 @@ async function main() {
   rcon = await Rcon.connect(RCON_CFG);
   console.log('RCON connected\n');
 
+  // Initialize blockchain bridge (graceful — no-ops if no key set)
+  await chainBridge.init();
+  console.log('');
+
   // Set up coins scoreboard for betting
   try { await rcon.send('scoreboard objectives add coins dummy {"text":"Coins","color":"gold"}'); } catch {}
   try { await rcon.send('scoreboard objectives setdisplay list coins'); } catch {}
@@ -1309,11 +1379,14 @@ async function main() {
         await rcon.send(`team modify sb15 prefix [${parts.join(',')}]`);
       }
 
-      // --- Pool info (sb16) ---
+      // --- Pool info + chain stats (sb16) ---
       const allBets = Object.values(activeBets).flatMap(b => Object.entries(b));
       const totalPool = allBets.reduce((s, [, b]) => s + b.amount, 0);
       const betCount = allBets.length;
-      await rcon.send(`team modify sb16 prefix [{"text":"Pool: ","color":"gray"},{"text":"${totalPool}","color":"gold"},{"text":" · ","color":"dark_gray"},{"text":"${betCount}","color":"aqua"},{"text":" bets","color":"gray"}]`);
+      const chainSuffix = chainBridge.enabled
+        ? `,{"text":" · ","color":"dark_gray"},{"text":"${chainBridge.onChainGames}","color":"light_purple"},{"text":" on-chain","color":"gray"}`
+        : '';
+      await rcon.send(`team modify sb16 prefix [{"text":"Pool: ","color":"gray"},{"text":"${totalPool}","color":"gold"},{"text":" · ","color":"dark_gray"},{"text":"${betCount}","color":"aqua"},{"text":" bets","color":"gray"}${chainSuffix}]`);
 
       // Update kills scoreboard (belowName display)
       for (const [bName, stats] of Object.entries(botStats)) {
