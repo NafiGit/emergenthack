@@ -73,7 +73,8 @@ If the LLM fails, deterministic fallback structure templates are used. Retry log
 - **`src/agentMemory.js`** — Shared blackboard memory with TTL (default 5 min). Categories: resources, POIs, objectives
 - **`src/eventBus.js`** — Pub/sub event system for bot actions. Caches last 50 events, logs to `agents/{name}/{name}_actions.log` (rolling 100 lines)
 - **`src/messageSystem.js`** — Inter-agent direct messaging with inboxes (max 10 messages, rolling)
-- **`src/arena-bot.js`** — 20 arena bots (5 per arena) with 1v1 round-robin matchmaking, betting system, and Hypixel-style sidebar scoreboard. See **Arena Bot Architecture** below.
+- **`src/arena-bot.js`** — 20 arena bots (5 per arena) with 1v1 round-robin matchmaking, betting system, on-chain integration, and Hypixel-style sidebar scoreboard. See **Arena Bot Architecture** below.
+- **`src/chain-bridge.js`** — Monad Testnet blockchain bridge. Records matches on-chain via GameManager contract, rewards winning bettors with MON tokens. Graceful no-op without `MONAD_PRIVATE_KEY`. See **On-Chain Betting** below.
 - **`server/start-server.js`** — Node.js launcher for the Java Minecraft server. Auto-accepts EULA, auto-ops agents on join. New bot names must be added to the auto-OP list here.
 - **`agents/minecraft_mcp_server.py`** — Python MCP server for RCON control (requires `mcrcon`, `mcp` — see `agents/requirements.txt`)
 
@@ -143,6 +144,29 @@ WAITING (spawn 2 fighters) → COUNTDOWN (3-2-1-FIGHT, 4s) → BETTING (15s, ite
 
 **Auto-OP:** Bots are OP'd via RCON on spawn. New bot names must be added to the auto-OP list in `server/start-server.js`.
 
+### On-Chain Betting (Monad Testnet)
+
+`src/chain-bridge.js` bridges in-game betting to Monad Testnet via `GameManager.sol` at `0xbD2A6049BC38d11a445Fe4A21f4a6f5CFCC6912D`. Entirely optional — without `MONAD_PRIVATE_KEY` in `.env`, arena-bot runs in pure offline mode with no chain messages.
+
+**Flow:**
+```
+COUNTDOWN → chainBridge.createMatchGame() → "[MONAD] Match on-chain" in chat
+ENDING    → processBetPayouts (in-game coins)
+          → chainBridge.recordWinner() → winner on-chain
+          → chainBridge.rewardBettors() → MON sent to winning bettors
+          → "[MONAD] Rewarded PlayerX: 0.001 MON (TX: 0xABC...)"
+```
+
+**Player commands:** `!wallet <0x...>` registers an ETH address (persisted to `/tmp/arena-logs/wallets.json`). Players without wallets still get in-game coin rewards; on-chain MON rewards are a bonus.
+
+**Server wallet** (funded with testnet MON) acts as relay — creates games, sends rewards. No player-side signing needed.
+
+**Env vars:** `MONAD_PRIVATE_KEY`, `MONAD_RPC_URL` (default: `https://testnet-rpc.monad.xyz`), `MONAD_REWARD_AMOUNT` (default: `0.001` MON per winning bet).
+
+**Contract ABI** (minimal, in chain-bridge.js): `createGame(uint8)`, `declareWinner(uint256, address)`, `getTotalGames()`, `getGameDetails(uint256)`.
+
+**Scoreboard:** sb16 line shows on-chain game count alongside betting pool when chain is enabled.
+
 ### LLM Provider Chain
 
 Priority order with automatic fallback:
@@ -164,7 +188,7 @@ Browser (localhost:9112) → WebSocket → Proxy (net-browserify) → TCP → MC
 
 ## Environment Setup
 
-Copy `.env.example` to `.env` and configure at least one LLM provider (Azure OpenAI recommended, OpenRouter free tier as fallback).
+Copy `.env.example` to `.env` and configure at least one LLM provider (Azure OpenAI recommended, OpenRouter free tier as fallback). For on-chain features, set `MONAD_PRIVATE_KEY` to a funded Monad Testnet wallet (get MON from https://faucet.monad.xyz).
 
 ## Server Configuration
 
