@@ -1,0 +1,13 @@
+{
+  "name": "Fury", "arena": "pvp", "version": 1,
+  "combat": {
+    "attack_range": 3.5, "chase_sprint_distance": 5,
+    "strafe_chance": 0.6, "strafe_duration_ms": 200,
+    "sprint_jump_crit_chance": 0.4, "crit_duration_ms": 300,
+    "heal_threshold": 6, "shield_after_attack": false,
+    "approach_style": "direct", "combo_delay_ms": 0,
+    "flee_hp_threshold": 4, "flee_chance": 0.1, "flee_duration_ms": 500
+  },
+  "notes": "Aggressive — charges head-on, barely retreats",
+  "history": []
+}

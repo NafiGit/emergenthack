@@ -1,0 +1,13 @@
+{
+  "name": "Reaper", "arena": "pvp", "version": 1,
+  "combat": {
+    "attack_range": 4.0, "chase_sprint_distance": 3,
+    "strafe_chance": 0.5, "strafe_duration_ms": 200,
+    "sprint_jump_crit_chance": 0.6, "crit_duration_ms": 500,
+    "heal_threshold": 0, "shield_after_attack": false,
+    "approach_style": "direct", "combo_delay_ms": 0,
+    "flee_hp_threshold": 0, "flee_chance": 0, "flee_duration_ms": 0
+  },
+  "notes": "Glass cannon — all offense, no retreat",
+  "history": []
+}

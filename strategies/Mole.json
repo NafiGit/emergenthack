@@ -1,0 +1,12 @@
+{
+  "name": "Mole", "arena": "spleef", "version": 1,
+  "combat": {
+    "chase_distance": 3, "sprint_threshold": 7,
+    "dig_radius_x": 3, "dig_radius_z": 3, "dig_depth": 4,
+    "dig_under_self_fallback": true,
+    "approach_style": "chase_then_dig",
+    "flee_when_no_snow": false
+  },
+  "notes": "Aggressive digger — digs wide area",
+  "history": []
+}

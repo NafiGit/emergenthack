@@ -1,0 +1,14 @@
+{
+  "name": "Robin", "arena": "archery", "version": 1,
+  "combat": {
+    "strafe_chance": 0.4, "strafe_duration_ms": 400,
+    "forward_chance": 0.15, "backward_chance": 0.15,
+    "move_duration_ms": 300,
+    "charge_base_ms": 300, "charge_per_distance_ms": 20, "max_charge_ms": 1000,
+    "gravity_base": 1.6, "gravity_per_distance": 0.04,
+    "cooldown_ms": 1500, "lead_target": false,
+    "preferred_distance": 12
+  },
+  "notes": "Balanced — adaptable archer",
+  "history": []
+}

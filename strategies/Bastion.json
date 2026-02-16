@@ -1,0 +1,13 @@
+{
+  "name": "Bastion", "arena": "pvp", "version": 1,
+  "combat": {
+    "attack_range": 3.5, "chase_sprint_distance": 5,
+    "strafe_chance": 0.4, "strafe_duration_ms": 200,
+    "sprint_jump_crit_chance": 0.15, "crit_duration_ms": 300,
+    "heal_threshold": 14, "shield_after_attack": true,
+    "approach_style": "direct", "combo_delay_ms": 0,
+    "flee_hp_threshold": 10, "flee_chance": 0.3, "flee_duration_ms": 800
+  },
+  "notes": "Defensive — shields and heals, retreats often",
+  "history": []
+}

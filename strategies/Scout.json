@@ -1,0 +1,12 @@
+{
+  "name": "Scout", "arena": "spleef", "version": 1,
+  "combat": {
+    "chase_distance": 5, "sprint_threshold": 7,
+    "dig_radius_x": 1, "dig_radius_z": 1, "dig_depth": 2,
+    "dig_under_self_fallback": true,
+    "approach_style": "chase_then_dig",
+    "flee_when_no_snow": true, "safe_snow_search_radius": 6
+  },
+  "notes": "Cautious — careful digging, flees danger",
+  "history": []
+}

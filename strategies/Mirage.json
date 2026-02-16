@@ -1,0 +1,14 @@
+{
+  "name": "Mirage", "arena": "archery", "version": 1,
+  "combat": {
+    "strafe_chance": 0.8, "strafe_duration_ms": 600,
+    "forward_chance": 0.25, "backward_chance": 0.3,
+    "move_duration_ms": 500,
+    "charge_base_ms": 300, "charge_per_distance_ms": 20, "max_charge_ms": 1000,
+    "gravity_base": 1.6, "gravity_per_distance": 0.04,
+    "cooldown_ms": 1200, "lead_target": false,
+    "preferred_distance": 12
+  },
+  "notes": "Dodger — hard to hit, decent shots",
+  "history": []
+}
