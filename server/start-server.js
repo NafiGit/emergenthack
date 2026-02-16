@@ -61,6 +61,9 @@ serverProcess.stdout.on('data', (data) => {
           console.log(`🔑 Auto-opped agent: ${name}`);
         }, 1000);
       }
+      setTimeout(() => {
+        serverProcess.stdin.write(`tag ${name} remove has_wands\n`);
+      }, 2000);
     }
   }
 

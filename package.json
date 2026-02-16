@@ -17,6 +17,7 @@
     "axios": "^1.6.7",
     "canvas": "^3.2.1",
     "dotenv": "^16.4.0",
+    "ethers": "^6.16.0",
     "flying-squid": "^1.11.0",
     "minecraft-data": "^3.105.0",
     "mineflayer": "^4.20.1",
