@@ -68,6 +68,14 @@ const botStats = {};      // name → { attacks, blocks_dug, arrows_shot, deaths
 const isEating = {};      // name → boolean (prevents golden apple spam)
 const isReconnecting = {}; // name → boolean (prevents duplicate reconnect loops)
 
+// ─── Betting System ──────────────────────────────────────────
+const STARTING_COINS = 100;
+const DEFAULT_BET = 10;
+const playerCoins = {};   // playerName → coin balance
+const activeBets = { pvp: {}, sumo: {}, spleef: {}, archery: {} };
+const bettingOpen = { pvp: false, sumo: false, spleef: false, archery: false };
+const chatDedup = new Set(); // prevent duplicate chat processing across bots
+
 // ─── Match Lifecycle — one self-driving game loop per arena ─────
 // States: WAITING → COUNTDOWN → ACTIVE → ENDING → RESETTING → WAITING
 const arenaMatches = {
@@ -132,6 +140,12 @@ async function arenaGameLoop(arena) {
     // Reset command block timer to prevent conflict with game loop lifecycle
     try { await rcon.send(`scoreboard players set ${arena}_t timer 0`); } catch {}
 
+    // Open betting for this arena
+    bettingOpen[arena] = true;
+    try {
+      await rcon.send(`say [BETTING] ${arena.toUpperCase()} #${match.matchNum}: ${bots[0].name} vs ${bots[1].name} — type !bet ${bots[0].name} or !bet ${bots[1].name}`);
+    } catch {}
+
     // Freeze bots at spawn
     for (const def of bots) {
       if (botStats[def.name]) botStats[def.name].active = false;
@@ -161,6 +175,7 @@ async function arenaGameLoop(arena) {
     // ── ACTIVE: enable combat, wait for match end signal or timeout ──
     match.state = 'ACTIVE';
     match.startTime = Date.now();
+    bettingOpen[arena] = false; // Lock bets
     for (const def of bots) {
       if (botStats[def.name]) botStats[def.name].active = true;
     }
@@ -232,6 +247,9 @@ async function arenaGameLoop(arena) {
       if (botStats[result.winner]) botStats[result.winner].kills++;
     }
 
+    // Process betting payouts
+    await processBetPayouts(arena, result.winner);
+
     await sleep(3000); // Show result
 
     // ── RESETTING: regen terrain, clean entities, heal, regive items ──
@@ -297,6 +315,98 @@ function endMatch(arena, reason, winner = null) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function ts() { return new Date().toISOString().slice(11, 19); }
 function log(name, msg) { logToFile(name, msg); }
+
+// ─── Betting commands ─────────────────────────────────────────
+
+async function handleBet(playerName, message) {
+  // Initialize player if new
+  if (playerCoins[playerName] === undefined) {
+    playerCoins[playerName] = STARTING_COINS;
+    try { await rcon.send(`scoreboard players set ${playerName} coins ${STARTING_COINS}`); } catch {}
+    try { await rcon.send(`tell ${playerName} Welcome! You start with ${STARTING_COINS} coins.`); } catch {}
+  }
+
+  // Parse: !bet <botname> [amount]
+  const parts = message.split(' ').filter(Boolean);
+  if (parts.length < 2) {
+    try { await rcon.send(`tell ${playerName} Usage: !bet <botname> [amount]. Default: ${DEFAULT_BET} coins`); } catch {}
+    return;
+  }
+
+  const targetBot = parts[1];
+  const amount = Math.max(1, parseInt(parts[2]) || DEFAULT_BET);
+
+  // Validate bot name
+  const botDef = BOT_DEFS.find(d => d.name.toLowerCase() === targetBot.toLowerCase());
+  if (!botDef) {
+    try { await rcon.send(`tell ${playerName} Unknown bot. Available: ${BOT_DEFS.map(d => d.name).join(', ')}`); } catch {}
+    return;
+  }
+
+  // Check if betting is open for this arena
+  if (!bettingOpen[botDef.arena]) {
+    try { await rcon.send(`tell ${playerName} Betting closed for ${botDef.arena}. Wait for next countdown!`); } catch {}
+    return;
+  }
+
+  // Check balance
+  if (playerCoins[playerName] < amount) {
+    try { await rcon.send(`tell ${playerName} Not enough coins! Balance: ${playerCoins[playerName]}`); } catch {}
+    return;
+  }
+
+  // Cancel existing bet on same arena
+  if (activeBets[botDef.arena][playerName]) {
+    const old = activeBets[botDef.arena][playerName];
+    playerCoins[playerName] += old.amount;
+  }
+
+  // Place bet
+  playerCoins[playerName] -= amount;
+  activeBets[botDef.arena][playerName] = { bot: botDef.name, amount };
+
+  try {
+    await rcon.send(`scoreboard players set ${playerName} coins ${playerCoins[playerName]}`);
+    await rcon.send(`tell ${playerName} Bet: ${amount} coins on ${botDef.name}! Balance: ${playerCoins[playerName]}`);
+  } catch {}
+  console.log(`[${ts()}] [BET] ${playerName} bet ${amount} on ${botDef.name} (${botDef.arena})`);
+}
+
+async function showBalance(playerName) {
+  if (playerCoins[playerName] === undefined) {
+    playerCoins[playerName] = STARTING_COINS;
+    try { await rcon.send(`scoreboard players set ${playerName} coins ${STARTING_COINS}`); } catch {}
+  }
+  try { await rcon.send(`tell ${playerName} Balance: ${playerCoins[playerName]} coins`); } catch {}
+}
+
+async function processBetPayouts(arena, winner) {
+  const bets = activeBets[arena];
+  const betEntries = Object.entries(bets);
+  if (betEntries.length === 0) return;
+
+  for (const [player, bet] of betEntries) {
+    if (winner && bet.bot === winner) {
+      const payout = bet.amount * 2;
+      playerCoins[player] = (playerCoins[player] || 0) + payout;
+      try {
+        await rcon.send(`scoreboard players set ${player} coins ${playerCoins[player]}`);
+        await rcon.send(`tell ${player} You WON! +${payout} coins (bet on ${bet.bot}). Balance: ${playerCoins[player]}`);
+      } catch {}
+    } else {
+      try { await rcon.send(`tell ${player} You lost ${bet.amount} coins (bet on ${bet.bot}). Balance: ${playerCoins[player] || 0}`); } catch {}
+    }
+  }
+
+  // Announce total payouts
+  const totalPool = betEntries.reduce((s, [, b]) => s + b.amount, 0);
+  const winners = betEntries.filter(([, b]) => winner && b.bot === winner);
+  try {
+    await rcon.send(`say [BETS] ${arena.toUpperCase()}: Pool ${totalPool} coins, ${winners.length}/${betEntries.length} won`);
+  } catch {}
+
+  activeBets[arena] = {};
+}
 
 // ─── Get opponent entity from cross-referenced bot ─────────
 
@@ -714,6 +824,17 @@ function createArenaBot(def) {
     botStats[name].active = false; // Inactive until match lifecycle starts
     botInstances[name] = bot;
 
+    // Betting chat listener (dedup across all bots seeing same message)
+    bot.on('chat', (username, msg) => {
+      if (BOT_DEFS.some(d => d.name === username)) return;
+      const key = `${username}:${msg}:${Math.floor(Date.now() / 1000)}`;
+      if (chatDedup.has(key)) return;
+      chatDedup.add(key);
+      setTimeout(() => chatDedup.delete(key), 2000);
+      if (msg.startsWith('!bet')) handleBet(username, msg);
+      else if (msg === '!coins' || msg === '!balance') showBalance(username);
+    });
+
     // Start combat loop (250ms) — only ticks during ACTIVE match state
     const combatFn = combatFns[arena];
     combatInterval = setInterval(async () => {
@@ -835,6 +956,11 @@ async function main() {
 
   rcon = await Rcon.connect(RCON_CFG);
   console.log('RCON connected\n');
+
+  // Set up coins scoreboard for betting
+  try { await rcon.send('scoreboard objectives add coins dummy {"text":"Coins","color":"gold"}'); } catch {}
+  try { await rcon.send('scoreboard objectives setdisplay list coins'); } catch {}
+  console.log('Betting system ready (coins scoreboard)\n');
 
   // Keep inventory on death (prevents item drops / entity spam)
   await rcon.send('gamerule keepInventory true');
