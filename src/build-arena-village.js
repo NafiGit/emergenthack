@@ -267,12 +267,16 @@ function buildItemGiverChain() {
 
   // --- Chain A: Item Giver (y=1, x=-20, z=-20, east) ---
   let bx = -20, bz = -20, idx = 0;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 8} 1 ${bz} air`); // clear space
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 10} 1 ${bz} air`); // clear space
+
+  // First: clear any leftover sticks (prevents duplicates on rebuild)
+  cmds.push(repeatBlock(bx + idx, 1, bz, 'east',
+    `execute as @a[${hubSel},tag=!has_wands,tag=!bot] run clear @s minecraft:carrot_on_a_stick`));
+  idx++;
 
   for (const item of SPECTATE_ITEMS) {
-    const blockFn = idx === 0 ? repeatBlock : chainBlock;
     const itemNBT = `{display:{Name:'{"text":"[${item.name}] Spectate","color":"${item.color}","bold":true,"italic":false}'},CustomModelData:${item.cmd}}`;
-    cmds.push(blockFn(bx + idx, 1, bz, 'east',
+    cmds.push(chainBlock(bx + idx, 1, bz, 'east',
       `execute as @a[${hubSel},tag=!has_wands,tag=!bot] at @s run give @s minecraft:carrot_on_a_stick${itemNBT} 1`));
     idx++;
   }
@@ -299,6 +303,14 @@ function buildItemGiverChain() {
   cmds.push(`setblock ${bx} 1 ${bz} air`);
   cmds.push(repeatBlock(bx, 1, bz, 'east',
     `execute as @a[tag=has_wands] unless entity @s[${hubSel}] run tag @s remove has_wands`));
+
+  // --- Chain D: Infinite food + health for spectators (y=1, x=-20, z=-32) ---
+  bx = -20; bz = -32;
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 1} 1 ${bz} air`);
+  cmds.push(repeatBlock(bx, 1, bz, 'east',
+    `effect give @a[tag=!bot] minecraft:saturation 30 0 true`));
+  cmds.push(chainBlock(bx + 1, 1, bz, 'east',
+    `effect give @a[tag=!bot] minecraft:resistance 30 4 true`));
 
   return cmds;
 }
@@ -533,25 +545,26 @@ function setupScoreboards() {
     `team join sb13 \u00a7c\u00a7r`, `team join sb14 \u00a7d\u00a7r`,
     `team join sb15 \u00a7e\u00a7r`, `team join sb16 \u00a7f\u00a7r`,
 
-    // Set line text via team prefixes
+    // Set line text via team prefixes — clean Hypixel-style layout
+    // sb01(16)=subtitle  sb02(15)=blank  sb03-06(14-11)=arenas  sb07(10)=blank
+    // sb08(9)=matches  sb09(8)=best  sb10(7)=blank  sb11(6)=betting header
+    // sb12(5)=pool  sb13(4)=#1  sb14(3)=#2/#3  sb15(2)=hint  sb16(1)=blank
     'team modify sb01 prefix {"text":"Arena Village","color":"white"}',
     'team modify sb02 prefix {"text":""}',
-    'team modify sb03 prefix [{"text":"Matches: ","color":"gray"},{"text":"0","color":"light_purple"}]',
-    // Lines 4-11: per-arena 1v1 matchup + KDR (2 lines each, updated live by arena-bot.js)
-    'team modify sb04 prefix [{"text":"PVP ","color":"yellow","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb05 prefix [{"text":" K/D loading...","color":"gray"}]',
-    'team modify sb06 prefix [{"text":"SUMO ","color":"green","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb07 prefix [{"text":" K/D loading...","color":"gray"}]',
-    'team modify sb08 prefix [{"text":"SPLEEF ","color":"aqua","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb09 prefix [{"text":" K/D loading...","color":"gray"}]',
-    'team modify sb10 prefix [{"text":"ARCHERY ","color":"red","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb11 prefix [{"text":" K/D loading...","color":"gray"}]',
-    'team modify sb12 prefix {"text":""}',
-    // Betting section (sb13-sb16 — updated live by arena-bot.js)
-    'team modify sb13 prefix [{"text":"── ","color":"dark_gray"},{"text":"BETTING","color":"light_purple","bold":true},{"text":" ──","color":"dark_gray"}]',
-    'team modify sb14 prefix [{"text":"Bets: ","color":"gray"},{"text":"0","color":"aqua"},{"text":" Pool: ","color":"gray"},{"text":"0","color":"gold"}]',
-    'team modify sb15 prefix [{"text":"No bettors yet","color":"gray","italic":true}]',
-    'team modify sb16 prefix [{"text":"Spectate to bet!","color":"dark_gray","italic":true}]',
+    'team modify sb03 prefix [{"text":"PVP ","color":"yellow","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb04 prefix [{"text":"SUMO ","color":"green","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb05 prefix [{"text":"SPLEEF ","color":"aqua","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb06 prefix [{"text":"ARCHERY ","color":"red","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb07 prefix {"text":""}',
+    'team modify sb08 prefix [{"text":"Matches: ","color":"gray"},{"text":"0","color":"light_purple"}]',
+    'team modify sb09 prefix [{"text":"Best: ","color":"gray"},{"text":"─","color":"dark_gray"}]',
+    'team modify sb10 prefix {"text":""}',
+    'team modify sb11 prefix [{"text":"── ","color":"dark_gray"},{"text":"BETTING","color":"light_purple","bold":true},{"text":" ──","color":"dark_gray"}]',
+    'team modify sb12 prefix [{"text":"Pool: ","color":"gray"},{"text":"0","color":"gold"},{"text":" · Bets: ","color":"dark_gray"},{"text":"0","color":"aqua"}]',
+    'team modify sb13 prefix [{"text":"No bettors yet","color":"gray","italic":true}]',
+    'team modify sb14 prefix {"text":""}',
+    'team modify sb15 prefix [{"text":"Spectate to bet!","color":"dark_gray","italic":true}]',
+    'team modify sb16 prefix {"text":""}',
 
     // Show death messages for kill tracking
     'gamerule showDeathMessages true',

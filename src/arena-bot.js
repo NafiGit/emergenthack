@@ -1,7 +1,6 @@
-// MineForge Arena — 20 Independent AI Bots (5 per arena) in 1v1 combat
-// Each bot is its own mineflayer connection with arena-specific combat AI
-// Bots find opponents via cross-referenced bot.entity (mineflayer offline mode
-// doesn't populate entity.type/username for other players)
+// MineForge Arena — 20 AI Bots (5 per arena, 1v1 on-demand spawning)
+// Only 2 bots connect per arena at a time (the active fighters)
+// After each match, fighters disconnect and the next pair spawns in
 
 import mineflayer from 'mineflayer';
 import pkg from 'mineflayer-pathfinder';
@@ -200,14 +199,18 @@ async function arenaGameLoop(arena) {
     if (matchQueue.length === 0) matchQueue = generatePairs();
     const [fighter1, fighter2] = matchQueue.shift();
 
-    // ── WAITING: poll until both fighters are connected ──
+    // ── WAITING: spawn both fighters on-demand ──
     match.state = 'WAITING';
     match.winner = null;
-    while (true) {
-      if (botInstances[fighter1.name] && botInstances[fighter2.name]) break;
-      await sleep(2000);
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Spawning ${fighter1.name} & ${fighter2.name}...`);
+
+    try {
+      await Promise.all([spawnFighter(fighter1), spawnFighter(fighter2)]);
+    } catch (e) {
+      console.log(`[${ts()}] [${arena.toUpperCase()}] Failed to spawn fighters: ${e.message}. Retrying in 5s...`);
+      await sleep(5000);
+      continue; // retry this match pair
     }
-    await sleep(1000);
 
     currentFighters[arena] = [fighter1.name, fighter2.name];
 
@@ -231,12 +234,6 @@ async function arenaGameLoop(arena) {
         bot.clearControlStates();
         bot.chat(`/tp @s ${def.spawn.x} ${def.spawn.y} ${def.spawn.z}`);
       }
-    }
-    for (const def of allBots) {
-      if (def.name === fighter1.name || def.name === fighter2.name) continue;
-      if (botStats[def.name]) botStats[def.name].active = false;
-      const bot = botInstances[def.name];
-      if (bot) bot.chat(`/tp @s ${HUB_POS.x} ${HUB_POS.y} ${HUB_POS.z}`);
     }
     await sleep(1000);
 
@@ -392,9 +389,13 @@ async function arenaGameLoop(arena) {
       await rcon.send(`tag @a[tag=bettor_${arena}] remove bettor_${arena}`);
     } catch {}
 
-    // ── RESETTING: regen, heal only the 2 fighters ──
+    // ── RESETTING: despawn fighters, clean arena ──
     match.state = 'RESETTING';
     console.log(`[${ts()}] [${arena.toUpperCase()}] Resetting...`);
+
+    // Despawn the 2 fighters (disconnect from server)
+    despawnFighter(fighter1.name);
+    despawnFighter(fighter2.name);
 
     try {
       try { await rcon.send(`scoreboard players set ${arena}_t timer 0`); } catch {}
@@ -410,27 +411,6 @@ async function arenaGameLoop(arena) {
       try { await rcon.send(`kill @e[type=item,${sel}]`); } catch {}
       try { await rcon.send(`kill @e[type=arrow,${sel}]`); } catch {}
       try { await rcon.send(`kill @e[type=experience_orb,${sel}]`); } catch {}
-
-      for (const def of fighters) {
-        const bot = botInstances[def.name];
-        if (bot) bot.chat(`/tp @s ${def.spawn.x} ${def.spawn.y} ${def.spawn.z}`);
-      }
-      await sleep(1000);
-
-      for (const def of fighters) {
-        try { await rcon.send(`effect give ${def.name} minecraft:instant_health 1 5`); } catch {}
-        try { await rcon.send(`effect give ${def.name} minecraft:saturation 5 5 true`); } catch {}
-      }
-
-      for (const def of fighters) {
-        const bot = botInstances[def.name];
-        if (!bot) continue;
-        bot.chat('/clear @s');
-        await sleep(200);
-        await giveItems(def.name, arena);
-        await sleep(500);
-        await equipForArena(bot, def.name, arena);
-      }
     } catch (e) {
       console.log(`[${ts()}] [${arena.toUpperCase()}] Reset error: ${e.message}`);
     }
@@ -1018,204 +998,212 @@ async function entityCleanup() {
   } catch {}
 }
 
-// ─── Create one arena bot ──────────────────────────────────
+// ─── Create one arena bot (on-demand, returns Promise) ──────
 
-function createArenaBot(def) {
-  const { name, arena, spawn } = def;
+function spawnFighter(def) {
+  return new Promise((resolve, reject) => {
+    const { name, arena, spawn } = def;
 
-  // Load strategy file
-  const strat = loadStrategy(name);
-  botStrategies[name] = strat;
-  if (strat) {
-    log(name, `Loaded strategy v${strat.version} for ${arena} arena`);
-  } else {
-    log(name, `No strategy file found, using defaults for ${arena} arena`);
-  }
+    // Load strategy file (cached after first load)
+    if (!botStrategies[name]) {
+      const strat = loadStrategy(name);
+      botStrategies[name] = strat;
+      if (strat) log(name, `Loaded strategy v${strat.version} for ${arena} arena`);
+      else log(name, `No strategy file found, using defaults for ${arena} arena`);
+    }
 
-  log(name, `Creating bot for ${arena} arena...`);
+    // Initialize persistent stats (survives across matches)
+    if (!botStats[name]) {
+      botStats[name] = {
+        arena, attacks: 0, kills: 0, blocks_dug: 0, arrows_shot: 0,
+        deaths: 0, tickCount: 0, staleTicks: 0, active: false,
+      };
+    }
 
-  const bot = mineflayer.createBot({
-    host: 'localhost',
-    port: 25565,
-    username: name,
-    auth: 'offline',
-    version: '1.16.2',
-  });
+    log(name, `Spawning for ${arena} match...`);
 
-  bot.loadPlugin(pathfinder);
-
-  botStats[name] = {
-    arena, attacks: 0, kills: 0, blocks_dug: 0, arrows_shot: 0,
-    deaths: 0, tickCount: 0, staleTicks: 0, active: false,
-  };
-
-  let combatInterval = null;
-  let healthCheckInterval = null;
-  let heatmapInterval = null;
-
-  bot.once('spawn', async () => {
-    log(name, 'Spawned! Waiting for OP...');
-    await sleep(2000);
-
-    try { await rcon.send(`op ${name}`); } catch {}
-
-    // Teleport to arena
-    bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
-    log(name, `Teleported to ${arena} (${spawn.x}, ${spawn.y}, ${spawn.z})`);
-    await sleep(3000);
-
-    // Give items via RCON
-    bot.chat('/clear @s');
-    await sleep(200);
-    await giveItems(name, arena);
-    await sleep(500);
-    await equipForArena(bot, name, arena);
-    log(name, `Equipped for ${arena}`);
-
-    botStats[name].active = false; // Inactive until match lifecycle starts
-    botInstances[name] = bot;
-
-    // Chat listener — !bet (legacy) and !coins
-    bot.on('chat', (username, msg) => {
-      if (BOT_DEFS.some(d => d.name === username)) return;
-      const key = `${username}:${msg}:${Math.floor(Date.now() / 1000)}`;
-      if (chatDedup.has(key)) return;
-      chatDedup.add(key);
-      setTimeout(() => chatDedup.delete(key), 2000);
-      if (msg.startsWith('!bet')) handleBet(username, msg);
-      else if (msg === '!coins' || msg === '!balance') showBalance(username);
+    const bot = mineflayer.createBot({
+      host: 'localhost',
+      port: 25565,
+      username: name,
+      auth: 'offline',
+      version: '1.16.2',
     });
 
-    // GUI betting — whisper handler for clickable tellraw (1v1: choice 1 or 2)
-    bot.on('whisper', (username, msg) => {
-      if (BOT_DEFS.some(d => d.name === username)) return;
-      if (!msg.startsWith('BET:')) return;
-      const parts = msg.split(':');
-      if (parts.length < 3) return;
-      const betArena = parts[1];
-      const choice = parseInt(parts[2]);
-      if (!betArena || isNaN(choice) || choice < 1 || choice > 2) return;
-      const fighters = currentFighters[betArena];
-      if (!fighters || fighters.length < 2) return;
-      handleGuiBet(username, betArena, fighters[choice - 1]);
-    });
+    bot.loadPlugin(pathfinder);
 
-    // Start combat loop (250ms) — only ticks during ACTIVE match state
-    const combatFn = combatFns[arena];
-    combatInterval = setInterval(async () => {
-      if (arenaMatches[arena]?.state !== 'ACTIVE') return;
-      if (!botStats[name].active) return;
-      if (!aliveBots[arena].has(name)) return;
-      if (!bot.entity?.position || !isInArena(bot.entity.position, arena)) return;
-      const target = getNearestOpponent(name, arena);
-      if (!target) return;
-      botStats[name].tickCount++;
-      try { await combatFn(bot, name, target); } catch (e) {
-        log(name, `Combat error: ${e.message}`);
-      }
-    }, 250);
+    // Track whether this bot was intentionally quit (vs kicked/crashed)
+    bot._intentionalQuit = false;
 
-    // Health check every 10s — logged to per-bot file
-    healthCheckInterval = setInterval(() => {
-      if (!bot.entity) return;
-      const stats = botStats[name];
-      const pos = bot.entity.position;
-      const target = getNearestOpponent(name, arena);
-      const dist = target ? bot.entity.position.distanceTo(target.position).toFixed(1) : 'N/A';
-      const alive = aliveBots[arena].size;
+    let combatInterval = null;
+    let healthCheckInterval = null;
+    let heatmapInterval = null;
 
-      logToFile(name, `[HEALTH-CHECK] HP:${bot.health?.toFixed(1) || '?'}/20 | ` +
-        `Pos:(${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) | ` +
-        `Nearest dist:${dist} | Arena:${arena} (${alive} alive) | ` +
-        `ATK:${stats.attacks} DIG:${stats.blocks_dug} ARW:${stats.arrows_shot} | ` +
-        `Deaths:${stats.deaths} | Tick:${stats.tickCount}`);
+    bot.once('spawn', async () => {
+      log(name, 'Spawned! Waiting for OP...');
+      await sleep(2000);
 
-      // Stale detection
-      if (!target && stats.active) {
-        stats.staleTicks++;
-        logToFile(name, `[STALE-WARNING] Cannot find opponent for ${stats.staleTicks * 10}s`);
-        if (stats.staleTicks >= 3) {
-          logToFile(name, `[STALE-RECOVERY] Re-teleporting to spawn...`);
-          bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
-          stats.staleTicks = 0;
-        }
-      } else {
-        stats.staleTicks = 0;
-      }
+      try { await rcon.send(`op ${name}`); } catch {}
+      try { await rcon.send(`tag ${name} add bot`); } catch {}
 
-    }, 10000);
+      // Teleport to arena spawn
+      bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
+      log(name, `Teleported to ${arena} (${spawn.x}, ${spawn.y}, ${spawn.z})`);
+      await sleep(3000);
 
-    // Heatmap logging every 1s
-    heatmapInterval = setInterval(() => {
-      if (!bot.entity) return;
-      const p = bot.entity.position;
-      const entry = JSON.stringify({
-        t: Date.now(), x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1),
-        hp: bot.health, food: bot.food, yaw: +bot.entity.yaw.toFixed(2),
-        active: botStats[name].active
+      // Give items via RCON
+      bot.chat('/clear @s');
+      await sleep(200);
+      await giveItems(name, arena);
+      await sleep(500);
+      await equipForArena(bot, name, arena);
+      log(name, `Equipped for ${arena}`);
+
+      botStats[name].active = false;
+      botInstances[name] = bot;
+
+      // Chat listener — !bet (legacy) and !coins
+      bot.on('chat', (username, msg) => {
+        if (BOT_DEFS.some(d => d.name === username)) return;
+        const key = `${username}:${msg}:${Math.floor(Date.now() / 1000)}`;
+        if (chatDedup.has(key)) return;
+        chatDedup.add(key);
+        setTimeout(() => chatDedup.delete(key), 2000);
+        if (msg.startsWith('!bet')) handleBet(username, msg);
+        else if (msg === '!coins' || msg === '!balance') showBalance(username);
       });
-      fs.appendFileSync(path.join(LOG_DIR, name + '-heatmap.jsonl'), entry + '\n');
-    }, 1000);
-  });
 
-  // Death handler — 1v1 elimination
-  bot.on('death', () => {
-    botStats[name].deaths++;
-    log(name, `[DEATH] Eliminated! (death #${botStats[name].deaths})`);
-    eliminateBot(arena, name);
-  });
+      // GUI betting — whisper handler for clickable tellraw (1v1: choice 1 or 2)
+      bot.on('whisper', (username, msg) => {
+        if (BOT_DEFS.some(d => d.name === username)) return;
+        if (!msg.startsWith('BET:')) return;
+        const parts = msg.split(':');
+        if (parts.length < 3) return;
+        const betArena = parts[1];
+        const choice = parseInt(parts[2]);
+        if (!betArena || isNaN(choice) || choice < 1 || choice > 2) return;
+        const fighters = currentFighters[betArena];
+        if (!fighters || fighters.length < 2) return;
+        handleGuiBet(username, betArena, fighters[choice - 1]);
+      });
 
-  // Forced move (timer TP'd to hub) — end match as timeout
-  bot.on('forcedMove', () => {
-    const match = arenaMatches[arena];
-    if (match && (match.state === 'ENDING' || match.state === 'RESETTING')) return;
-    const pos = bot.entity?.position;
-    if (pos && Math.abs(pos.x - HUB_POS.x) < 5 && Math.abs(pos.z - HUB_POS.z) < 5) {
-      log(name, 'ForcedMove to hub (command block timer expired)');
-      endMatch(arena, 'Timer expired', null).catch(() => {});
+      // Start combat loop (250ms) — only ticks during ACTIVE match state
+      const combatFn = combatFns[arena];
+      combatInterval = setInterval(async () => {
+        if (arenaMatches[arena]?.state !== 'ACTIVE') return;
+        if (!botStats[name].active) return;
+        if (!aliveBots[arena].has(name)) return;
+        if (!bot.entity?.position || !isInArena(bot.entity.position, arena)) return;
+        const target = getNearestOpponent(name, arena);
+        if (!target) return;
+        botStats[name].tickCount++;
+        try { await combatFn(bot, name, target); } catch (e) {
+          log(name, `Combat error: ${e.message}`);
+        }
+      }, 250);
+
+      // Health check every 10s
+      healthCheckInterval = setInterval(() => {
+        if (!bot.entity) return;
+        const stats = botStats[name];
+        const pos = bot.entity.position;
+        const target = getNearestOpponent(name, arena);
+        const dist = target ? bot.entity.position.distanceTo(target.position).toFixed(1) : 'N/A';
+        const alive = aliveBots[arena].size;
+
+        logToFile(name, `[HEALTH-CHECK] HP:${bot.health?.toFixed(1) || '?'}/20 | ` +
+          `Pos:(${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) | ` +
+          `Nearest dist:${dist} | Arena:${arena} (${alive} alive) | ` +
+          `ATK:${stats.attacks} DIG:${stats.blocks_dug} ARW:${stats.arrows_shot} | ` +
+          `Deaths:${stats.deaths} | Tick:${stats.tickCount}`);
+
+        if (!target && stats.active) {
+          stats.staleTicks++;
+          logToFile(name, `[STALE-WARNING] Cannot find opponent for ${stats.staleTicks * 10}s`);
+          if (stats.staleTicks >= 3) {
+            logToFile(name, `[STALE-RECOVERY] Re-teleporting to spawn...`);
+            bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
+            stats.staleTicks = 0;
+          }
+        } else if (botStats[name]) {
+          botStats[name].staleTicks = 0;
+        }
+      }, 10000);
+
+      // Heatmap logging every 1s
+      heatmapInterval = setInterval(() => {
+        if (!bot.entity) return;
+        const p = bot.entity.position;
+        const entry = JSON.stringify({
+          t: Date.now(), x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1),
+          hp: bot.health, food: bot.food, yaw: +bot.entity.yaw.toFixed(2),
+          active: botStats[name].active
+        });
+        fs.appendFileSync(path.join(LOG_DIR, name + '-heatmap.jsonl'), entry + '\n');
+      }, 1000);
+
+      // Bot is ready — resolve the promise
+      resolve(bot);
+    });
+
+    // Death handler — 1v1 elimination
+    bot.on('death', () => {
+      if (botStats[name]) botStats[name].deaths++;
+      log(name, `[DEATH] Eliminated! (death #${botStats[name]?.deaths})`);
+      eliminateBot(arena, name);
+    });
+
+    // Forced move (timer TP'd to hub) — end match as timeout
+    bot.on('forcedMove', () => {
+      const match = arenaMatches[arena];
+      if (match && (match.state === 'ENDING' || match.state === 'RESETTING')) return;
+      const pos = bot.entity?.position;
+      if (pos && Math.abs(pos.x - HUB_POS.x) < 5 && Math.abs(pos.z - HUB_POS.z) < 5) {
+        log(name, 'ForcedMove to hub (command block timer expired)');
+        endMatch(arena, 'Timer expired', null).catch(() => {});
+      }
+    });
+
+    bot.on('error', (err) => {
+      log(name, `ERROR: ${err.message}`);
+      if (!botInstances[name]) reject(err);
+    });
+
+    bot.on('kicked', (reason) => {
+      log(name, `KICKED: ${JSON.stringify(reason)}`);
+      cleanup();
+    });
+
+    bot.on('end', () => {
+      log(name, bot._intentionalQuit ? 'Disconnected (match over)' : 'DISCONNECTED unexpectedly');
+      cleanup();
+    });
+
+    function cleanup() {
+      if (combatInterval) { clearInterval(combatInterval); combatInterval = null; }
+      if (healthCheckInterval) { clearInterval(healthCheckInterval); healthCheckInterval = null; }
+      if (heatmapInterval) { clearInterval(heatmapInterval); heatmapInterval = null; }
+      if (botStats[name]) botStats[name].active = false;
+      delete botInstances[name];
     }
   });
+}
 
-  bot.on('error', (err) => log(name, `ERROR: ${err.message}`));
-
-  bot.on('kicked', (reason) => {
-    log(name, `KICKED: ${JSON.stringify(reason)}`);
-    cleanup();
-    reconnect();
-  });
-
-  bot.on('end', () => {
-    log(name, 'DISCONNECTED');
-    cleanup();
-    reconnect();
-  });
-
-  function cleanup() {
-    if (combatInterval) { clearInterval(combatInterval); combatInterval = null; }
-    if (healthCheckInterval) { clearInterval(healthCheckInterval); healthCheckInterval = null; }
-    if (heatmapInterval) { clearInterval(heatmapInterval); heatmapInterval = null; }
-    botStats[name].active = false;
-    delete botInstances[name];
-  }
-
-  function reconnect() {
-    if (isReconnecting[name]) return; // prevent duplicate reconnect
-    isReconnecting[name] = true;
-    log(name, 'Reconnecting in 5s...');
-    setTimeout(() => {
-      isReconnecting[name] = false;
-      createArenaBot(def);
-    }, 5000);
-  }
-
-  return bot;
+// Disconnect a fighter after their match ends
+function despawnFighter(name) {
+  const bot = botInstances[name];
+  if (!bot) return;
+  bot._intentionalQuit = true;
+  try { bot.quit(); } catch {}
+  delete botInstances[name];
+  log(name, 'Despawned (match complete)');
 }
 
 // ─── Main ──────────────────────────────────────────────────
 
 async function main() {
   console.log('\n' + '='.repeat(70));
-  console.log('  MINEFORGE ARENA — 20 AI BOTS (5 per arena, 1v1)');
+  console.log('  MINEFORGE ARENA — 1v1 ON-DEMAND (5 bots per arena, 2 at a time)');
   console.log('  PvP | Sumo | Spleef | Archery');
   console.log('='.repeat(70) + '\n');
 
@@ -1241,24 +1229,7 @@ async function main() {
   await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
   console.log('Spleef snow regenerated\n');
 
-  // OP all bots + tag for gallery selector exclusion
-  for (const def of BOT_DEFS) {
-    try { await rcon.send(`op ${def.name}`); } catch {}
-    try { await rcon.send(`tag ${def.name} add bot`); } catch {}
-  }
-  console.log('All 20 bots OP\'d + tagged\n');
-
-  // Spawn bots in 5 waves (1 per arena per wave, 4s gap)
-  for (let wave = 0; wave < BOTS_PER_ARENA; wave++) {
-    console.log(`Spawning wave ${wave + 1}/${BOTS_PER_ARENA} (4 bots)...\n`);
-    const waveBots = BOT_DEFS.filter((_, i) => i % BOTS_PER_ARENA === wave);
-    for (const def of waveBots) {
-      createArenaBot(def);
-    }
-    if (wave < BOTS_PER_ARENA - 1) await sleep(4000);
-  }
-
-  console.log('\nAll 20 bots launched! Monitoring...\n');
+  console.log('Bots spawn on-demand (2 per arena per match)\n');
 
   // Entity cleanup every 2 minutes (arrows, dropped items)
   setInterval(entityCleanup, 120000);
@@ -1358,9 +1329,9 @@ async function main() {
 main().catch(e => { console.error('Fatal:', e.message); process.exit(1); });
 
 process.on('SIGINT', () => {
-  console.log('\nShutting down all bots...');
+  console.log('\nShutting down active bots...');
   for (const [name, bot] of Object.entries(botInstances)) {
-    try { bot.quit(); } catch {}
+    try { bot._intentionalQuit = true; bot.quit(); } catch {}
   }
   if (rcon) rcon.end();
   process.exit(0);
