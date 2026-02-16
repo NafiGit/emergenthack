@@ -510,6 +510,14 @@ function clearArea() {
 
 function setupScoreboards() {
   return [
+    // Remove stale objectives from previous builds
+    'scoreboard objectives remove timer',
+    'scoreboard objectives remove kills',
+    'scoreboard objectives remove wins',
+    'scoreboard objectives remove coins',
+    'scoreboard objectives remove use_stick',
+    'scoreboard objectives remove betting',
+
     // Internal timer objective (tick counter per arena)
     'scoreboard objectives add timer dummy',
     'scoreboard players set pvp_t timer 0',
@@ -531,7 +539,8 @@ function setupScoreboards() {
     'scoreboard players set spleef_bet betting 0',
     'scoreboard players set archery_bet betting 0',
 
-    // Hypixel-style sidebar — dummy objective with fake player lines + teams for text
+    // Hypixel-style sidebar — remove first to clear stale entries from previous builds
+    'scoreboard objectives remove sidebar',
     'scoreboard objectives add sidebar dummy {"text":"MINEFORGE","bold":true,"color":"gold"}',
     'scoreboard objectives setdisplay sidebar sidebar',
     'scoreboard objectives setdisplay belowName kills',
@@ -1045,6 +1054,10 @@ function buildArcheryArena() {
 
 function setSpawn() {
   return [
+    // Clear all custom tags so item giver + navigation works fresh after rebuild
+    'tag @a remove has_wands',
+    'tag @a remove nav_tp',
+    'tag @a remove floor_tp',
     `setworldspawn ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`,
     `spawnpoint @a ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`,
     `gamerule doImmediateRespawn true`,

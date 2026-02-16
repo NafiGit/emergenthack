@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**MineForge** — An AI-powered Minecraft civilization where 3 autonomous LLM-driven agents build and manage a virtual world, with a 4-arena PvP village ("MineForge Arena Village") at spawn for FFA (free-for-all, 5 bots per arena) mini-games. Built for the Emergent Hackathon.
+**MineForge** — An AI-powered Minecraft civilization where 3 autonomous LLM-driven agents build and manage a virtual world, with a 4-arena PvP village ("MineForge Arena Village") at spawn for 1v1 round-robin mini-games with spectator betting. Built for the Emergent Hackathon.
 
 The README.md uses marketing names (Vulkan, Terra, Sage) but the actual code uses **Saumya** (Protocol Architect), **Sumedha** (DeFi Designer), **Ahaan** (Governance Sage).
 
@@ -69,12 +69,12 @@ If the LLM fails, deterministic fallback structure templates are used. Retry log
 
 - **`src/demo.js`** — Main orchestration: agent spawning, LLM integration, perceive-think-act loop, empire building state machine (10 phases). **Note:** `GROUND_Y = -60` is set for 1.18+ but the server is 1.16.2 (ground at y=3) — agent builds may target invalid Y coords.
 - **`src/api-server.js`** — REST API (port 4000) for manual bot control: goto, move, chat, break, place, attack, look, etc.
-- **`src/build-arena-village.js`** — RCON-based MineForge arena builder. Builds hub with interactive button teleporters, 4 arenas with 2-minute timer command blocks, and return-to-hub buttons. One-time script, structures persist in world.
+- **`src/build-arena-village.js`** — RCON-based arena builder. Builds hub, 4 arenas with timer command blocks, item-based navigation system, spectator galleries, and spleef elevator. One-time script, structures persist in world.
 - **`src/agentMemory.js`** — Shared blackboard memory with TTL (default 5 min). Categories: resources, POIs, objectives
 - **`src/eventBus.js`** — Pub/sub event system for bot actions. Caches last 50 events, logs to `agents/{name}/{name}_actions.log` (rolling 100 lines)
 - **`src/messageSystem.js`** — Inter-agent direct messaging with inboxes (max 10 messages, rolling)
-- **`src/arena-bot.js`** — 20 arena bots (5 per arena) with FFA game loops. Last standing wins. See **Arena Bot Architecture** below for details.
-- **`server/start-server.js`** — Node.js launcher for the Java Minecraft server. Auto-accepts EULA, auto-ops agents on join (Saumya, Sumedha, Ahaan, Architect, ArenaBuilder, ArenaBot, Pvp1-5, Sumo1-5, Spleef1-5, Archer1-5)
+- **`src/arena-bot.js`** — 20 arena bots (5 per arena) with 1v1 round-robin matchmaking, betting system, and Hypixel-style sidebar scoreboard. See **Arena Bot Architecture** below.
+- **`server/start-server.js`** — Node.js launcher for the Java Minecraft server. Auto-accepts EULA, auto-ops agents on join. New bot names must be added to the auto-OP list here.
 - **`agents/minecraft_mcp_server.py`** — Python MCP server for RCON control (requires `mcrcon`, `mcp` — see `agents/requirements.txt`)
 
 ### Building Structures
@@ -88,51 +88,56 @@ RCON is more reliable for build scripts. The `/fill` command has a 32768 block l
 
 ### MineForge Arena Village
 
-The arena village uses command blocks for interactive gameplay:
+The arena village uses command blocks and item-based interactions:
 
-- **Button teleporters**: Impulse command blocks buried under stone buttons. `tp @p[distance=..3]` teleports the nearest player to the arena.
+- **Item-based navigation**: Players receive 5 `carrot_on_a_stick` wands (CustomModelData 1-5: PvP, Sumo, Spleef, Archery, Hub) via a repeating command block chain. Right-clicking a wand teleports to that arena's spectator gallery. Uses `minecraft.used:minecraft.carrot_on_a_stick` scoreboard criterion + `SelectedItem` NBT checks.
+- **Tag-based state**: `has_wands` prevents duplicate item giving, `nav_tp` triggers React-style inventory refresh after teleport (clear items → remove tag → giver re-gives next tick), `floor_tp` tracks spleef floor cycling state.
+- **Item system** (`buildItemSystem()`): 3 underground command block chains at y=1:
+  - **Chain A** (x=-20, z=-20): Universal item giver — clears sticks, gives 5 wands, tags `has_wands`
+  - **Chain B** (x=-20, z=-25): Right-click detection — spectate TP (with spleef floor cycling), nav refresh, betting detection (CMD 11-18 → whisper to bot), single `use_stick` reset
+  - **Chain C** (x=-20, z=-30): Buffs — infinite saturation + resistance V for spectators, auto-kill dropped items
+- **Betting items**: During BETTING phase, arena-bot.js gives spectators 2 betting wands (CMD 11-18) per arena. Right-clicking whispers `BET:<arena>:<choice>` to the first bot in that arena for processing.
 - **Timer system**: Per-arena repeating + chain command block chains buried at y=1. Uses scoreboard objective `timer` with fake players (`pvp_t`, `sumo_t`, `spleef_t`, `archery_t`). 2400 ticks = 2 minutes, with countdown warnings at 60s/30s/10s.
 - **Area detection**: `@a[x=..,y=..,z=..,dx=..,dy=..,dz=..]` box selectors detect players inside arenas.
 - **Adventure mode**: `CanDestroy` NBT tag on spleef shovels allows breaking snow_block in adventure mode.
-- **Scoreboard**: `kills` (playerKillCount, auto-tracks PvP kills, shown on sidebar + below nametags) and `wins` (dummy, managed by arena bot on death/match end).
-- **Spectator galleries**: 3-block-wide glass corridors wrapping all 4 sides of each arena, outside the detection area. Outer walls (stone_bricks), inner glass walls (viewing into arena), quartz floor, glass ceiling with sea lantern lighting. Entrance passthroughs have glass tunnel walls to prevent spectators from entering arenas. Hub has spectate buttons that TP to gallery corners. Built by `buildSpectatorGallery()` in `build-arena-village.js`.
-- **Staircases**: Sumo staircase ascends east toward bridge (x=33→39, y=4→10). Spleef staircase ascends west toward entrance bridge (x=-25→-36, y=4→15). Both have solid fill below for structure.
+- **Scoreboard**: Hypixel-style sidebar with 16 team-prefixed invisible players (`§0§r` through `§f§r`). 2 lines per arena (matchup + all bot kills), matches/best stats, top 3 bettor leaderboard, and betting pool. Updated every 5s by arena-bot.js.
+- **Spectator galleries**: 3-block-wide glass corridors wrapping all 4 sides of each arena. Spleef has 3 viewing floors (y=8, y=12, y=16) with wand-based floor cycling.
+- **Spleef floor cycling**: CMD 3 wand detects player Y-level: bottom (y=7-11) → middle, middle (y=12-15) → gallery, gallery (y=16+) → bottom. Outside spleef → gallery.
+- **Scoreboard cleanup**: `setupScoreboards()` removes all objectives before re-adding to prevent stale entries. `setSpawn()` clears `has_wands`/`nav_tp`/`floor_tp` tags.
 
 ### Arena Bot Architecture
 
-`src/arena-bot.js` runs 20 bots in a single process (5 per arena) in FFA (free-for-all, last standing wins) format, each with strategy-driven combat AI.
+`src/arena-bot.js` runs 20 bots (5 per arena) with **1v1 round-robin matchmaking** — only 2 bots connect per arena at a time, cycling through all 10 possible pairings.
 
 **Bots per arena:**
 | Arena | Bots | Spawn Y | Win Condition |
 |-------|------|---------|---------------|
-| PvP | Pvp1-Pvp5 | 4 | Last standing or timeout HP compare |
-| Sumo | Sumo1-Sumo5 | 11 | Fall below y=5 (`SUMO_FALL_Y`) or last standing |
-| Spleef | Spleef1-Spleef5 | 16 | Last standing (lava at y=3) |
-| Archery | Archer1-Archer5 | 4 | Last standing or timeout HP compare |
+| PvP | Fury, Bastion, Shadow, Knight, Reaper | 4 | Last standing or timeout HP compare |
+| Sumo | Rhino, Boulder, Viper, IronFist, Fortress | 11 | Fall below y=5 (`SUMO_FALL_Y`) or last standing |
+| Spleef | Mole, Scout, Dash, Quake, Lurker | 16 | Last standing (lava at y=3) |
+| Archery | Hawkeye, Ranger, Sentinel, Mirage, Robin | 4 | Last standing or timeout HP compare |
 
-**FFA tracking:** `aliveBots[arena]` is a Set of bot names. `eliminateBot(arena, name)` removes a bot from the set. Match ends when <=1 bot remains. `getNearestOpponent(myName, arena)` scans all alive bots in the same arena to find the nearest target.
-
-**Retreat AI:** PvP bots flee when HP is low and no golden apples (strategy params: `flee_hp_threshold`, `flee_duration_ms`, `flee_chance`). Spleef bots search for safe snow when standing on air (strategy params: `flee_when_no_snow`, `safe_snow_search_radius`).
+**1v1 matchmaking:** `generatePairs()` creates all C(5,2)=10 pairings per arena, shuffled. Only the 2 current fighters spawn (on-demand via mineflayer). After each match, fighters disconnect and the next pair spawns. `currentFighters[arena]` tracks the active pair.
 
 **Per-arena game loop** (`arenaGameLoop(arena)`) — each arena runs independently:
 ```
-WAITING (all 5 connected) → COUNTDOWN (3-2-1-FIGHT, 4s) → ACTIVE (FFA combat, up to 2min)
-    → ENDING (announce winner, 3s) → RESETTING (regen/heal/regive all 5, 3s) → loop
+WAITING (spawn 2 fighters) → COUNTDOWN (3-2-1-FIGHT, 4s) → BETTING (15s, items given to spectators)
+    → ACTIVE (1v1 combat, up to 2min) → ENDING (announce winner, 3s) → RESETTING (despawn fighters, 3s) → loop
 ```
 
-**Spawn waves:** 5 waves (1 bot per arena per wave, 4s delay between waves) to stagger connections.
+**Betting system**: During BETTING phase, spectators in gallery receive 2 `carrot_on_a_stick` items (one per fighter). Right-clicking whispers to the bot. `handleGuiBet()` processes bets, tracks `playerCoins` and `activeBets`. Default bet: 5 coins. Payouts at match end based on pool split.
 
-**Betting:** 5 clickable options per arena. Players whisper 1-5 to bet on a specific bot.
+**Retreat AI:** PvP bots flee when HP is low and no golden apples (strategy params: `flee_hp_threshold`, `flee_duration_ms`, `flee_chance`). Spleef bots search for safe snow when standing on air (strategy params: `flee_when_no_snow`, `safe_snow_search_radius`).
 
-**Match end signaling:** Promise-based. `matchEndResolvers[arena]` holds a resolve function. Death handler, sumo fall detection, or timeout calls `signalMatchEnd()` which resolves the Promise in the game loop. Second signal for same match is a no-op (resolver already deleted).
+**Match end signaling:** Promise-based. `matchEndResolvers[arena]` holds a resolve function. Death handler, sumo fall detection, or timeout calls `signalMatchEnd()` which resolves the Promise in the game loop.
 
 **Combat ticks:** 250ms interval per bot, gated on `arenaMatches[arena].state === 'ACTIVE'`. Each arena has its own tick function: `pvpTick`, `sumoTick`, `spleefTick`, `archeryTick`.
 
-**Strategy files** (`strategies/<BotName>.json`): 20 per-bot JSON files with distinct combat parameters (attack_range, strafe_chance, heal_threshold, flee_hp_threshold, etc.). Each bot has a unique playstyle (e.g., aggressive, defensive, evasive, glass-cannon). Loaded at bot spawn, fallback defaults if missing.
+**Strategy files** (`strategies/<BotName>.json`): Per-bot JSON files with distinct combat parameters (attack_range, strafe_chance, heal_threshold, flee_hp_threshold, etc.). Each bot has a unique playstyle. Loaded at bot spawn, fallback defaults if missing.
 
 **Arena configs** (`arenas/<arena>.json`): Coordinates, bounds, spawn points, and design notes for each arena.
 
-**Spleef snow regen:** During RESETTING, three `fill` commands regenerate snow at y=7, y=11, y=15 via RCON *before* teleporting bots back. 500ms sleep after regen.
+**Spleef snow regen:** During RESETTING, three `fill` commands regenerate snow at y=7, y=11, y=15 via RCON *before* teleporting bots back.
 
 **Logging:** Per-bot file logging to `/tmp/arena-logs/<BotName>.log`. Heatmap JSONL logging (position every 1s) to `/tmp/arena-logs/<BotName>_heatmap.jsonl`.
 
@@ -171,6 +176,6 @@ Minecraft 1.16.2 on superflat world. Key settings in `server/java-server/server.
 - `online-mode=false`, `enable-command-block=true`, `spawn-protection=0`
 - `view-distance=10`, `level-type=flat`, `generate-structures=false`
 
-World spawn is set to `0, 4, -8` (MineForge hub, solid ground). Adventure mode prevents block breaking; buttons + command blocks handle arena teleportation. Each arena has a 2-minute timer (repeating command blocks underground at y=1) and a "Return to Hub" button. AI agents build around (500, 500). Base-themed blocks: `blue_concrete`, `white_concrete`, `light_blue_concrete`, `quartz_block`, `sea_lantern`, `prismarine`, `lapis_block`, `packed_ice`. Ground level on superflat: y=3.
+World spawn is set to `0, 4, -8` (MineForge hub, solid ground). Adventure mode prevents block breaking; item-based wands handle navigation between arenas. Each arena has a 2-minute timer (repeating command blocks underground at y=1) and a "Return to Hub" wand. AI agents build around (500, 500). Ground level on superflat: y=3.
 
 **Arena centers** (from `build-arena-village.js`): PvP at (0, 55) south, Sumo at (55, 0) east, Spleef at (-55, 0) west, Archery at (0, -55) north. G=3 (ground), Y=4 (build floor). Sumo platform at y=10 (platY=G+7).
