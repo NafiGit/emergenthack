@@ -95,7 +95,7 @@ The arena village uses command blocks for interactive gameplay:
 - **Area detection**: `@a[x=..,y=..,z=..,dx=..,dy=..,dz=..]` box selectors detect players inside arenas.
 - **Adventure mode**: `CanDestroy` NBT tag on spleef shovels allows breaking snow_block in adventure mode.
 - **Scoreboard**: `kills` (playerKillCount, auto-tracks PvP kills, shown on sidebar + below nametags) and `wins` (dummy, managed by arena bot on death/match end).
-- **Spectator boxes**: Glass viewing rooms outside each arena's detection area with return-to-hub buttons. Hub has spectate buttons next to the join buttons. Built by `buildSpectatorBox()` in `build-arena-village.js`.
+- **Spectator galleries**: 3-block-wide glass corridors wrapping all 4 sides of each arena, outside the detection area. Outer walls (stone_bricks), inner glass walls (viewing into arena), quartz floor, glass ceiling with sea lantern lighting. Entrance passthroughs have glass tunnel walls to prevent spectators from entering arenas. Hub has spectate buttons that TP to gallery corners. Built by `buildSpectatorGallery()` in `build-arena-village.js`.
 - **Staircases**: Sumo staircase ascends east toward bridge (x=33→39, y=4→10). Spleef staircase ascends west toward entrance bridge (x=-25→-36, y=4→15). Both have solid fill below for structure.
 
 ### Arena Bot Architecture

@@ -595,6 +595,9 @@ function buildPvPArena() {
   cmds.push(`fill ${ax-1} ${Y} ${az-12} ${ax+1} ${Y+3} ${az-12} air`);
   // Cut entrance passthrough in gallery north corridor
   cmds.push(`fill ${ax-1} ${Y} ${az-15} ${ax+1} ${G+3} ${az-13} air`);
+  // Tunnel walls to separate gallery corridor from entrance path
+  cmds.push(`fill ${ax-2} ${Y} ${az-15} ${ax-2} ${G+3} ${az-13} glass`);
+  cmds.push(`fill ${ax+2} ${Y} ${az-15} ${ax+2} ${G+3} ${az-13} glass`);
   // Return button in gallery (NE corner of north corridor)
   cmds.push(`setblock ${ax+13} ${Y+1} ${az-14} oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock ${ax+13} ${Y} ${az-14} stone_button[face=wall,facing=south]`);
@@ -682,6 +685,9 @@ function buildSumoArena() {
   // Cut entrance passthrough from bridge (west side)
   cmds.push(`fill 40 ${platY+1} -1 40 ${platY+3} 1 air`);
   cmds.push(`fill 43 ${platY+1} -1 43 ${platY+3} 1 air`);
+  // Tunnel walls to separate gallery corridor from entrance path
+  cmds.push(`fill 40 ${platY+1} -2 42 ${platY+3} -2 glass`);
+  cmds.push(`fill 40 ${platY+1} 2 42 ${platY+3} 2 glass`);
   // Return button in gallery (NW corner of north corridor)
   cmds.push(`setblock 41 ${platY+2} -14 oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock 41 ${platY+1} -14 stone_button[face=wall,facing=south]`);
@@ -760,6 +766,9 @@ function buildSpleefArena() {
   // Spleef already has glass walls — no replacement needed, spectators see through them
   // Cut entrance passthrough in gallery east corridor (bridge enters from east)
   cmds.push(`fill -40 16 -1 -40 19 1 air`);
+  // Tunnel walls to separate gallery corridor from entrance path
+  cmds.push(`fill -42 16 -2 -40 19 -2 glass`);
+  cmds.push(`fill -42 16 2 -40 19 2 glass`);
   // Re-add bridge floor through gallery east corridor
   cmds.push(`fill -42 15 -1 -40 15 1 quartz_block`);
   // Return button in gallery (NE corner of north corridor)
@@ -838,6 +847,9 @@ function buildArcheryArena() {
   cmds.push(`fill ${ax-1} ${Y} ${az+7} ${ax+1} ${Y+3} ${az+7} air`);
   // Cut entrance passthrough in gallery south corridor
   cmds.push(`fill ${ax-1} ${Y} ${az+8} ${ax+1} ${G+3} ${az+10} air`);
+  // Tunnel walls to separate gallery corridor from entrance path
+  cmds.push(`fill ${ax-2} ${Y} ${az+8} ${ax-2} ${G+3} ${az+10} glass`);
+  cmds.push(`fill ${ax+2} ${Y} ${az+8} ${ax+2} ${G+3} ${az+10} glass`);
   // Return button in gallery (SE corner of south corridor)
   cmds.push(`setblock ${ax+16} ${Y+1} ${az+9} oak_wall_sign[facing=north]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
   cmds.push(`setblock ${ax+16} ${Y} ${az+9} stone_button[face=wall,facing=north]`);
