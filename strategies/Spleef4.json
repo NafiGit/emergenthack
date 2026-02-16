@@ -1,0 +1,12 @@
+{
+  "name": "Spleef4", "arena": "spleef", "version": 1,
+  "combat": {
+    "chase_distance": 3, "sprint_threshold": 7,
+    "dig_radius_x": 4, "dig_radius_z": 4, "dig_depth": 2,
+    "dig_under_self_fallback": true,
+    "approach_style": "chase_then_dig",
+    "flee_when_no_snow": true, "safe_snow_search_radius": 4
+  },
+  "notes": "Wide digger — creates huge holes",
+  "history": []
+}

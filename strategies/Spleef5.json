@@ -1,0 +1,12 @@
+{
+  "name": "Spleef5", "arena": "spleef", "version": 1,
+  "combat": {
+    "chase_distance": 2, "sprint_threshold": 3,
+    "dig_radius_x": 2, "dig_radius_z": 2, "dig_depth": 3,
+    "dig_under_self_fallback": true,
+    "approach_style": "chase_then_dig",
+    "flee_when_no_snow": true, "safe_snow_search_radius": 5
+  },
+  "notes": "Stalker — follows closely, digs under",
+  "history": []
+}

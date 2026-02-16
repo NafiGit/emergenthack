@@ -1,11 +1,12 @@
 {
   "name": "Spleef1", "arena": "spleef", "version": 1,
   "combat": {
-    "chase_distance": 4, "sprint_threshold": 7,
-    "dig_radius_x": 2, "dig_radius_z": 2, "dig_depth": 3,
+    "chase_distance": 3, "sprint_threshold": 7,
+    "dig_radius_x": 3, "dig_radius_z": 3, "dig_depth": 4,
     "dig_under_self_fallback": true,
-    "approach_style": "chase_then_dig"
+    "approach_style": "chase_then_dig",
+    "flee_when_no_snow": false
   },
-  "notes": "Initial default — tune these values based on combat logs",
+  "notes": "Aggressive digger — digs wide area",
   "history": []
 }

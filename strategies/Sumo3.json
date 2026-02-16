@@ -1,0 +1,11 @@
+{
+  "name": "Sumo3", "arena": "sumo", "version": 1,
+  "combat": {
+    "center_retreat_threshold": 1.5, "attack_range": 4.5,
+    "sprint_attack": true, "knockback_combo_delay_ms": 100,
+    "edge_awareness": true, "retreat_sprint_ms": 400,
+    "approach_style": "aggressive"
+  },
+  "notes": "Edge fighter — fights near platform edge",
+  "history": []
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Spleef3", "arena": "spleef", "version": 1,
+  "combat": {
+    "chase_distance": 6, "sprint_threshold": 4,
+    "dig_radius_x": 1, "dig_radius_z": 1, "dig_depth": 1,
+    "dig_under_self_fallback": true,
+    "approach_style": "chase_then_dig",
+    "flee_when_no_snow": true, "safe_snow_search_radius": 8
+  },
+  "notes": "Runner — digs while fleeing",
+  "history": []
+}

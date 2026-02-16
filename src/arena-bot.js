@@ -1,4 +1,4 @@
-// MineForge Arena — 8 Independent AI Bots (2 per arena) that fight each other
+// MineForge Arena — 20 Independent AI Bots (5 per arena) in FFA combat
 // Each bot is its own mineflayer connection with arena-specific combat AI
 // Bots find opponents via cross-referenced bot.entity (mineflayer offline mode
 // doesn't populate entity.type/username for other players)
@@ -39,18 +39,39 @@ function logToFile(name, msg) {
   fs.appendFileSync(path.join(LOG_DIR, name + '.log'), line);
 }
 
-// ─── Bot pair definitions ──────────────────────────────────
+// ─── Bot definitions (5 per arena, FFA) ──────────────────────
 
 const BOT_DEFS = [
-  { name: 'Pvp1',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 46 },    opponent: 'Pvp2' },
-  { name: 'Pvp2',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 64 },   opponent: 'Pvp1' },
-  { name: 'Sumo1',   arena: 'sumo',    spawn: { x: 50, y: 11, z: 5 },   opponent: 'Sumo2' },
-  { name: 'Sumo2',   arena: 'sumo',    spawn: { x: 60, y: 11, z: -5 },  opponent: 'Sumo1' },
-  { name: 'Spleef1', arena: 'spleef',  spawn: { x: -50, y: 16, z: 5 },  opponent: 'Spleef2' },
-  { name: 'Spleef2', arena: 'spleef',  spawn: { x: -60, y: 16, z: -5 }, opponent: 'Spleef1' },
-  { name: 'Archer1', arena: 'archery', spawn: { x: 5, y: 4, z: -52 },   opponent: 'Archer2' },
-  { name: 'Archer2', arena: 'archery', spawn: { x: -5, y: 4, z: -58 },  opponent: 'Archer1' },
+  // PvP Arena (south, center 0,55)
+  { name: 'Pvp1',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 46 } },
+  { name: 'Pvp2',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 64 } },
+  { name: 'Pvp3',    arena: 'pvp',     spawn: { x: -8, y: 4, z: 55 } },
+  { name: 'Pvp4',    arena: 'pvp',     spawn: { x: 8, y: 4, z: 55 } },
+  { name: 'Pvp5',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 52 } },
+
+  // Sumo Arena (east, center 55,0)
+  { name: 'Sumo1',   arena: 'sumo',    spawn: { x: 50, y: 11, z: 5 } },
+  { name: 'Sumo2',   arena: 'sumo',    spawn: { x: 60, y: 11, z: -5 } },
+  { name: 'Sumo3',   arena: 'sumo',    spawn: { x: 55, y: 11, z: 6 } },
+  { name: 'Sumo4',   arena: 'sumo',    spawn: { x: 55, y: 11, z: -6 } },
+  { name: 'Sumo5',   arena: 'sumo',    spawn: { x: 48, y: 11, z: 0 } },
+
+  // Spleef Arena (west, center -55,0)
+  { name: 'Spleef1', arena: 'spleef',  spawn: { x: -50, y: 16, z: 5 } },
+  { name: 'Spleef2', arena: 'spleef',  spawn: { x: -60, y: 16, z: -5 } },
+  { name: 'Spleef3', arena: 'spleef',  spawn: { x: -50, y: 16, z: -5 } },
+  { name: 'Spleef4', arena: 'spleef',  spawn: { x: -60, y: 16, z: 5 } },
+  { name: 'Spleef5', arena: 'spleef',  spawn: { x: -55, y: 16, z: 0 } },
+
+  // Archery Arena (north, center 0,-55)
+  { name: 'Archer1', arena: 'archery', spawn: { x: 5, y: 4, z: -52 } },
+  { name: 'Archer2', arena: 'archery', spawn: { x: -5, y: 4, z: -58 } },
+  { name: 'Archer3', arena: 'archery', spawn: { x: -10, y: 4, z: -55 } },
+  { name: 'Archer4', arena: 'archery', spawn: { x: 10, y: 4, z: -55 } },
+  { name: 'Archer5', arena: 'archery', spawn: { x: 0, y: 4, z: -55 } },
 ];
+
+const BOTS_PER_ARENA = 5;
 
 const SUMO_CENTER = { x: 55, y: 11, z: 0 };
 const SUMO_PLATFORM_RADIUS = 10;
@@ -67,6 +88,9 @@ const botInstances = {};  // name → mineflayer bot
 const botStats = {};      // name → { attacks, blocks_dug, arrows_shot, deaths, tickCount, staleTicks, active }
 const isEating = {};      // name → boolean (prevents golden apple spam)
 const isReconnecting = {}; // name → boolean (prevents duplicate reconnect loops)
+
+// ─── FFA alive tracking ────────────────────────────────────
+const aliveBots = { pvp: new Set(), sumo: new Set(), spleef: new Set(), archery: new Set() };
 
 // ─── Betting System ──────────────────────────────────────────
 const STARTING_COINS = 100;
@@ -135,16 +159,32 @@ function isInArena(pos, arena) {
 
 const MATCH_DURATION = 120000; // 2 minutes
 
+// ─── FFA elimination handler ────────────────────────────────
+function eliminateBot(arena, deadName) {
+  aliveBots[arena].delete(deadName);
+  if (botStats[deadName]) botStats[deadName].active = false;
+
+  const remaining = [...aliveBots[arena]];
+  console.log(`[${ts()}] [${arena.toUpperCase()}] ${deadName} eliminated! ${remaining.length} alive: ${remaining.join(', ')}`);
+
+  if (remaining.length <= 1) {
+    const winner = remaining[0] || null;
+    signalMatchEnd(arena, `${deadName} eliminated (last standing)`, winner);
+  }
+}
+
 // ─── The Game Loop (one per arena, runs forever) ──────
 async function arenaGameLoop(arena) {
   const match = arenaMatches[arena];
   const bots = BOT_DEFS.filter(d => d.arena === arena);
 
   while (true) {
-    // ── WAITING: poll until both bots are connected ──
+    // ── WAITING: poll until all bots are connected ──
     match.state = 'WAITING';
     match.winner = null;
-    while (!botInstances[bots[0].name] || !botInstances[bots[1].name]) {
+    while (true) {
+      const connected = bots.filter(d => botInstances[d.name]).length;
+      if (connected >= bots.length) break;
       await sleep(2000);
     }
     await sleep(1000); // brief settle
@@ -152,13 +192,16 @@ async function arenaGameLoop(arena) {
     // ── COUNTDOWN: 3-2-1-FIGHT ──
     match.state = 'COUNTDOWN';
     match.matchNum++;
-    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — COUNTDOWN`);
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — COUNTDOWN (${bots.length}-bot FFA)`);
 
     // Reset command block timer to prevent conflict with game loop lifecycle
     try { await rcon.send(`scoreboard players set ${arena}_t timer 0`); } catch {}
 
     // Clean up stale bettor tags from previous match
     try { await rcon.send(`tag @a[tag=bettor_${arena}] remove bettor_${arena}`); } catch {}
+
+    // Initialize alive set
+    aliveBots[arena] = new Set(bots.map(d => d.name));
 
     // Freeze bots at spawn
     for (const def of bots) {
@@ -187,22 +230,27 @@ async function arenaGameLoop(arena) {
 
     try {
       await rcon.send(`title ${galSel} title {"text":"BETTING OPEN","color":"gold","bold":true}`);
-      await rcon.send(`title ${galSel} subtitle {"text":"${bots[0].name} vs ${bots[1].name}","color":"white"}`);
+      const names = bots.map(d => d.name).join(' vs ');
+      await rcon.send(`title ${galSel} subtitle {"text":"${names}","color":"white"}`);
+
+      // Build clickable tellraw with all 5 bot options
+      const colors = ['green', 'red', 'aqua', 'yellow', 'light_purple'];
       const tellrawParts = [
         {"text":"\n"},
         {"text":"═══ PLACE YOUR BET ═══","color":"gold","bold":true},
-        {"text":"\n\n "},
-        {"text":`[${bots[0].name}]`,"color":"green","bold":true,
-         "clickEvent":{"action":"run_command","value":`/msg ${bots[0].name} BET:${arena}:1`},
-         "hoverEvent":{"action":"show_text","value":`Bet ${DEFAULT_BET} coins on ${bots[0].name}`}},
-        {"text":"  vs  ","color":"gray"},
-        {"text":`[${bots[1].name}]`,"color":"red","bold":true,
-         "clickEvent":{"action":"run_command","value":`/msg ${bots[0].name} BET:${arena}:2`},
-         "hoverEvent":{"action":"show_text","value":`Bet ${DEFAULT_BET} coins on ${bots[1].name}`}},
-        {"text":"\n"},
-        {"text":`${DEFAULT_BET} coins per bet · Click to place`,"color":"gray","italic":true},
-        {"text":"\n"}
+        {"text":"\n\n"},
       ];
+      for (let i = 0; i < bots.length; i++) {
+        if (i > 0) tellrawParts.push({"text":" | ","color":"gray"});
+        tellrawParts.push({
+          "text":`[${bots[i].name}]`,"color":colors[i % colors.length],"bold":true,
+          "clickEvent":{"action":"run_command","value":`/msg ${bots[0].name} BET:${arena}:${i+1}`},
+          "hoverEvent":{"action":"show_text","value":`Bet ${DEFAULT_BET} coins on ${bots[i].name}`}
+        });
+      }
+      tellrawParts.push({"text":"\n"});
+      tellrawParts.push({"text":`${DEFAULT_BET} coins per bet · Click to place`,"color":"gray","italic":true});
+      tellrawParts.push({"text":"\n"});
       await rcon.send(`tellraw ${galSel} ${JSON.stringify(tellrawParts)}`);
     } catch {}
 
@@ -226,7 +274,7 @@ async function arenaGameLoop(arena) {
     for (const def of bots) {
       try {
         await rcon.send(`title ${def.name} title {"text":"FIGHT!","color":"green","bold":true}`);
-        await rcon.send(`title ${def.name} subtitle {"text":"Match #${match.matchNum}","color":"gray"}`);
+        await rcon.send(`title ${def.name} subtitle {"text":"FFA Match #${match.matchNum}","color":"gray"}`);
       } catch {}
     }
     // Also announce to gallery spectators
@@ -238,7 +286,7 @@ async function arenaGameLoop(arena) {
     for (const def of bots) {
       if (botStats[def.name]) botStats[def.name].active = true;
     }
-    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — FIGHT!`);
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — FIGHT! (${bots.length}-bot FFA)`);
 
     // Bettor lock — TP escapees back to gallery every 3s
     const bettorLockInterval = setInterval(async () => {
@@ -250,13 +298,18 @@ async function arenaGameLoop(arena) {
     // Race: match-end signal vs timeout vs time announcements
     let cleanupTimers = null;
     const result = await new Promise(resolve => {
-      // Timeout after 2 minutes
+      // Timeout after 2 minutes — highest HP wins
       const timeout = setTimeout(() => {
-        const hp1 = botInstances[bots[0].name]?.health || 0;
-        const hp2 = botInstances[bots[1].name]?.health || 0;
+        const alive = [...aliveBots[arena]];
         let winner = null, reason = 'Timeout (Draw)';
-        if (hp1 > hp2) { winner = bots[0].name; reason = `Timeout (${winner} had more HP)`; }
-        else if (hp2 > hp1) { winner = bots[1].name; reason = `Timeout (${winner} had more HP)`; }
+        if (alive.length > 0) {
+          let bestHP = -1;
+          for (const name of alive) {
+            const hp = botInstances[name]?.health || 0;
+            if (hp > bestHP) { bestHP = hp; winner = name; }
+          }
+          reason = `Timeout (${winner} had most HP)`;
+        }
         signalMatchEnd(arena, reason, winner);
       }, MATCH_DURATION);
 
@@ -272,13 +325,13 @@ async function arenaGameLoop(arena) {
       const t30 = announce(30000, '0:30 remaining', 'gold');
       const t10 = announce(10000, '10 seconds!', 'red');
 
-      // Disconnect check every 3s — end match if a bot drops
+      // Disconnect check every 3s — end match if only 1 bot connected
       const dcCheck = setInterval(() => {
-        const b0 = botInstances[bots[0].name];
-        const b1 = botInstances[bots[1].name];
-        if (!b0 && b1) signalMatchEnd(arena, `${bots[0].name} disconnected`, bots[1].name);
-        else if (!b1 && b0) signalMatchEnd(arena, `${bots[1].name} disconnected`, bots[0].name);
-        else if (!b0 && !b1) signalMatchEnd(arena, 'Both disconnected', null);
+        const connected = bots.filter(d => botInstances[d.name] && aliveBots[arena].has(d.name)).length;
+        if (connected <= 1) {
+          const survivor = bots.find(d => botInstances[d.name] && aliveBots[arena].has(d.name));
+          signalMatchEnd(arena, connected === 0 ? 'All disconnected' : `${survivor.name} last standing (disconnects)`, survivor?.name || null);
+        }
       }, 3000);
 
       cleanupTimers = () => { clearTimeout(timeout); clearTimeout(t60); clearTimeout(t30); clearTimeout(t10); clearInterval(dcCheck); };
@@ -518,33 +571,47 @@ async function processBetPayouts(arena, winner) {
   activeBets[arena] = {};
 }
 
-// ─── Get opponent entity from cross-referenced bot ─────────
+// ─── FFA opponent targeting — find nearest alive enemy ──────
 
-function getOpponentEntity(myName, opponentName) {
+function getNearestOpponent(myName, arena) {
   const myBot = botInstances[myName];
-  const oppBot = botInstances[opponentName];
-  if (!myBot?.entity || !oppBot?.entity) return null;
+  if (!myBot?.entity) return null;
 
-  const oppPos = oppBot.entity.position;
-
-  // Find the matching entity in MY entity list by position proximity
-  let best = null;
+  const alive = aliveBots[arena];
+  let bestTarget = null;
   let bestDist = Infinity;
-  for (const entity of Object.values(myBot.entities)) {
-    if (entity === myBot.entity) continue;
-    if (!entity.position) continue;
-    const d = entity.position.distanceTo(oppPos);
-    if (d < bestDist) {
-      bestDist = d;
-      best = entity;
+
+  for (const oppName of alive) {
+    if (oppName === myName) continue;
+    const oppBot = botInstances[oppName];
+    if (!oppBot?.entity) continue;
+
+    const oppPos = oppBot.entity.position;
+
+    // Find the matching entity in MY entity list by position proximity
+    let localEntity = null;
+    let localBestDist = Infinity;
+    for (const entity of Object.values(myBot.entities)) {
+      if (entity === myBot.entity) continue;
+      if (!entity.position) continue;
+      const d = entity.position.distanceTo(oppPos);
+      if (d < localBestDist) {
+        localBestDist = d;
+        localEntity = entity;
+      }
+    }
+
+    // Use local entity if within 3 blocks match, else fallback to opponent entity ref
+    const targetEntity = (localEntity && localBestDist < 3) ? localEntity : oppBot.entity;
+    const dist = myBot.entity.position.distanceTo(targetEntity.position);
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestTarget = targetEntity;
     }
   }
 
-  // Within 3 blocks = same entity (position updates may lag slightly)
-  if (best && bestDist < 3) return best;
-
-  // Fallback: return opponent's entity ref directly (lookAt/position works, attack may fail)
-  return oppBot.entity;
+  return bestTarget;
 }
 
 // ─── Item giving via RCON ──────────────────────────────────
@@ -617,8 +684,31 @@ async function pvpTick(bot, name, target) {
   const critDur = strat?.combat?.crit_duration_ms ?? 300;
   const healThresh = strat?.combat?.heal_threshold ?? 10;
   const shieldAfter = strat?.combat?.shield_after_attack ?? false;
+  const fleeHP = strat?.combat?.flee_hp_threshold ?? 6;
+  const fleeDur = strat?.combat?.flee_duration_ms ?? 800;
+  const fleeChance = strat?.combat?.flee_chance ?? 0.3;
 
   const dist = bot.entity.position.distanceTo(target.position);
+
+  // Flee when low HP and no golden apples
+  if (bot.health < fleeHP && fleeHP > 0) {
+    const apple = bot.inventory.items().find(i => i.name === 'golden_apple');
+    if (!apple) {
+      // Sprint away from opponent
+      try { await bot.lookAt(target.position.offset(0, 1.6, 0)); } catch {}
+      bot.setControlState('forward', false);
+      bot.setControlState('back', true);
+      bot.setControlState('sprint', true);
+      const dir = Math.random() > 0.5 ? 'left' : 'right';
+      bot.setControlState(dir, true);
+      setTimeout(() => {
+        bot.setControlState('back', false);
+        bot.setControlState('sprint', false);
+        bot.setControlState(dir, false);
+      }, fleeDur);
+      return;
+    }
+  }
 
   // Eat golden apple when low HP (with lock to prevent spam)
   if (bot.health < healThresh && !isEating[name]) {
@@ -637,6 +727,19 @@ async function pvpTick(bot, name, target) {
       isEating[name] = false;
       return;
     }
+  }
+
+  // Random dodge — break off and strafe away briefly
+  if (dist <= range && Math.random() < fleeChance && fleeChance > 0) {
+    bot.setControlState('forward', false);
+    const dir = Math.random() > 0.5 ? 'left' : 'right';
+    bot.setControlState(dir, true);
+    bot.setControlState('back', true);
+    setTimeout(() => {
+      bot.setControlState(dir, false);
+      bot.setControlState('back', false);
+    }, fleeDur / 2);
+    return;
   }
 
   if (dist > range) {
@@ -684,11 +787,10 @@ async function sumoTick(bot, name, target) {
   const dist = bot.entity.position.distanceTo(target.position);
   const pos = bot.entity.position;
 
-  // Fall detection — opponent wins
+  // Fall detection — eliminated in FFA
   if (pos.y < SUMO_FALL_Y) {
     log(name, `FELL OFF PLATFORM! (y=${pos.y.toFixed(1)})`);
-    const def = BOT_DEFS.find(d => d.name === name);
-    endMatch('sumo', `${name} fell off`, def.opponent).catch(() => {});
+    eliminateBot('sumo', name);
     return;
   }
 
@@ -726,13 +828,14 @@ async function spleefTick(bot, name, target) {
   const digRX = strat?.combat?.dig_radius_x ?? 2;
   const digRZ = strat?.combat?.dig_radius_z ?? 2;
   const digDepth = strat?.combat?.dig_depth ?? 3;
+  const fleeNoSnow = strat?.combat?.flee_when_no_snow ?? true;
+  const safeRadius = strat?.combat?.safe_snow_search_radius ?? 5;
 
-  // Fall detection — first bot below bottom snow layer loses
+  // Fall detection — eliminated in FFA
   const pos = bot.entity.position;
   if (pos.y < 6) {
     log(name, `FELL THROUGH SNOW! (y=${pos.y.toFixed(1)})`);
-    const def = BOT_DEFS.find(d => d.name === name);
-    endMatch('spleef', `${name} fell through`, def.opponent).catch(() => {});
+    eliminateBot('spleef', name);
     return;
   }
 
@@ -740,6 +843,41 @@ async function spleefTick(bot, name, target) {
   const shovel = bot.inventory.items().find(i => i.name === 'iron_shovel');
   if (shovel && bot.heldItem?.name !== 'iron_shovel') {
     try { await bot.equip(shovel, 'hand'); } catch {}
+  }
+
+  // Flee to safety if no snow underfoot
+  if (fleeNoSnow) {
+    const blockBelow = bot.blockAt(pos.offset(0, -1, 0));
+    const blockBelow2 = bot.blockAt(pos.offset(0, -2, 0));
+    const onSnow = (blockBelow && blockBelow.name === 'snow_block') || (blockBelow2 && blockBelow2.name === 'snow_block');
+
+    if (!onSnow) {
+      // Search for nearest safe snow block to flee to
+      let safeDist = Infinity;
+      let safePos = null;
+      for (let dx = -safeRadius; dx <= safeRadius; dx++) {
+        for (let dz = -safeRadius; dz <= safeRadius; dz++) {
+          for (let dy = -2; dy <= 0; dy++) {
+            try {
+              const block = bot.blockAt(pos.offset(dx, dy, dz));
+              if (block && block.name === 'snow_block') {
+                const d = Math.abs(dx) + Math.abs(dz);
+                if (d < safeDist) {
+                  safeDist = d;
+                  safePos = block.position;
+                }
+              }
+            } catch {}
+          }
+        }
+      }
+      if (safePos) {
+        try { await bot.lookAt(safePos.offset(0, 1, 0)); } catch {}
+        bot.setControlState('forward', true);
+        bot.setControlState('sprint', true);
+        return;
+      }
+    }
   }
 
   const dist = bot.entity.position.distanceTo(target.position);
@@ -864,8 +1002,6 @@ async function archeryTick(bot, name, target) {
 
 const combatFns = { pvp: pvpTick, sumo: sumoTick, spleef: spleefTick, archery: archeryTick };
 
-// returnToArena removed — match lifecycle handles respawn/reset
-
 // ─── Entity cleanup (arrows, items) every 2 min ───────────
 
 async function entityCleanup() {
@@ -880,7 +1016,7 @@ async function entityCleanup() {
 // ─── Create one arena bot ──────────────────────────────────
 
 function createArenaBot(def) {
-  const { name, arena, spawn, opponent } = def;
+  const { name, arena, spawn } = def;
 
   // Load strategy file
   const strat = loadStrategy(name);
@@ -945,7 +1081,7 @@ function createArenaBot(def) {
       else if (msg === '!coins' || msg === '!balance') showBalance(username);
     });
 
-    // GUI betting — whisper handler for clickable tellraw (sends /msg to Bot1)
+    // GUI betting — whisper handler for clickable tellraw
     bot.on('whisper', (username, msg) => {
       if (BOT_DEFS.some(d => d.name === username)) return;
       if (!msg.startsWith('BET:')) return;
@@ -953,9 +1089,9 @@ function createArenaBot(def) {
       if (parts.length < 3) return;
       const betArena = parts[1];
       const choice = parseInt(parts[2]);
-      if (!betArena || isNaN(choice) || choice < 1 || choice > 2) return;
+      if (!betArena || isNaN(choice) || choice < 1 || choice > BOTS_PER_ARENA) return;
       const arenaBots = BOT_DEFS.filter(d => d.arena === betArena);
-      if (!arenaBots.length) return;
+      if (!arenaBots.length || choice > arenaBots.length) return;
       handleGuiBet(username, betArena, arenaBots[choice - 1].name);
     });
 
@@ -964,8 +1100,9 @@ function createArenaBot(def) {
     combatInterval = setInterval(async () => {
       if (arenaMatches[arena]?.state !== 'ACTIVE') return;
       if (!botStats[name].active) return;
+      if (!aliveBots[arena].has(name)) return;
       if (!bot.entity?.position || !isInArena(bot.entity.position, arena)) return;
-      const target = getOpponentEntity(name, opponent);
+      const target = getNearestOpponent(name, arena);
       if (!target) return;
       botStats[name].tickCount++;
       try { await combatFn(bot, name, target); } catch (e) {
@@ -978,19 +1115,20 @@ function createArenaBot(def) {
       if (!bot.entity) return;
       const stats = botStats[name];
       const pos = bot.entity.position;
-      const target = getOpponentEntity(name, opponent);
+      const target = getNearestOpponent(name, arena);
       const dist = target ? bot.entity.position.distanceTo(target.position).toFixed(1) : 'N/A';
+      const alive = aliveBots[arena].size;
 
       logToFile(name, `[HEALTH-CHECK] HP:${bot.health?.toFixed(1) || '?'}/20 | ` +
         `Pos:(${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) | ` +
-        `Opponent:${opponent} dist:${dist} | Arena:${arena} | ` +
+        `Nearest dist:${dist} | Arena:${arena} (${alive} alive) | ` +
         `ATK:${stats.attacks} DIG:${stats.blocks_dug} ARW:${stats.arrows_shot} | ` +
         `Deaths:${stats.deaths} | Tick:${stats.tickCount}`);
 
       // Stale detection
-      if (!target) {
+      if (!target && stats.active) {
         stats.staleTicks++;
-        logToFile(name, `[STALE-WARNING] Cannot find ${opponent} for ${stats.staleTicks * 10}s`);
+        logToFile(name, `[STALE-WARNING] Cannot find opponent for ${stats.staleTicks * 10}s`);
         if (stats.staleTicks >= 3) {
           logToFile(name, `[STALE-RECOVERY] Re-teleporting to spawn...`);
           bot.chat(`/tp @s ${spawn.x} ${spawn.y} ${spawn.z}`);
@@ -1015,13 +1153,11 @@ function createArenaBot(def) {
     }, 1000);
   });
 
-  // Death handler — triggers match end via lifecycle
+  // Death handler — FFA elimination
   bot.on('death', () => {
     botStats[name].deaths++;
-    log(name, `[DEATH] Killed by ${opponent}! (death #${botStats[name].deaths})`);
-    endMatch(arena, `${name} was killed`, opponent).catch(e => {
-      log(name, `Match end error: ${e.message}`);
-    });
+    log(name, `[DEATH] Eliminated! (death #${botStats[name].deaths})`);
+    eliminateBot(arena, name);
   });
 
   // Forced move (timer TP'd to hub) — end match as timeout
@@ -1074,7 +1210,7 @@ function createArenaBot(def) {
 
 async function main() {
   console.log('\n' + '='.repeat(70));
-  console.log('  MINEFORGE ARENA — 8 AI BOTS (2 per arena)');
+  console.log('  MINEFORGE ARENA — 20 AI BOTS (5 per arena, FFA)');
   console.log('  PvP | Sumo | Spleef | Archery');
   console.log('='.repeat(70) + '\n');
 
@@ -1105,24 +1241,19 @@ async function main() {
     try { await rcon.send(`op ${def.name}`); } catch {}
     try { await rcon.send(`tag ${def.name} add bot`); } catch {}
   }
-  console.log('All bots OP\'d + tagged\n');
+  console.log('All 20 bots OP\'d + tagged\n');
 
-  // Spawn first bot of each pair
-  console.log('Spawning first wave (4 bots)...\n');
-  const firstWave = BOT_DEFS.filter((_, i) => i % 2 === 0);
-  for (const def of firstWave) {
-    createArenaBot(def);
+  // Spawn bots in 5 waves (1 per arena per wave, 4s gap)
+  for (let wave = 0; wave < BOTS_PER_ARENA; wave++) {
+    console.log(`Spawning wave ${wave + 1}/${BOTS_PER_ARENA} (4 bots)...\n`);
+    const waveBots = BOT_DEFS.filter((_, i) => i % BOTS_PER_ARENA === wave);
+    for (const def of waveBots) {
+      createArenaBot(def);
+    }
+    if (wave < BOTS_PER_ARENA - 1) await sleep(4000);
   }
 
-  // Wait for first wave to be ready, then spawn second wave
-  await sleep(8000);
-  console.log('\nSpawning second wave (4 bots)...\n');
-  const secondWave = BOT_DEFS.filter((_, i) => i % 2 === 1);
-  for (const def of secondWave) {
-    createArenaBot(def);
-  }
-
-  console.log('\nAll 8 bots launched! Monitoring...\n');
+  console.log('\nAll 20 bots launched! Monitoring...\n');
 
   // Entity cleanup every 2 minutes (arrows, dropped items)
   setInterval(entityCleanup, 120000);
@@ -1135,43 +1266,22 @@ async function main() {
     console.log(`[${ts()}] Game loop started: ${arena}`);
   }
 
-  // Scoreboard sidebar updater — update live stats every 5s
-  // Bot name → sidebar team mapping (sb05-sb12)
-  const botSidebarTeam = {
-    Pvp1: 'sb05', Pvp2: 'sb06',
-    Sumo1: 'sb07', Sumo2: 'sb08',
-    Spleef1: 'sb09', Spleef2: 'sb10',
-    Archer1: 'sb11', Archer2: 'sb12',
-  };
-  const botColor = {
-    Pvp1: 'yellow', Pvp2: 'yellow',
-    Sumo1: 'green', Sumo2: 'green',
-    Spleef1: 'aqua', Spleef2: 'aqua',
-    Archer1: 'red', Archer2: 'red',
-  };
+  // Scoreboard sidebar updater — per-arena leaders every 5s
+  const arenaColors = { pvp: 'yellow', sumo: 'green', spleef: 'aqua', archery: 'red' };
+  const arenaSidebarTeams = { pvp: 'sb05', sumo: 'sb07', spleef: 'sb09', archery: 'sb11' };
+  const arenaStatTeams = { pvp: 'sb06', sumo: 'sb08', spleef: 'sb10', archery: 'sb12' };
+
   setInterval(async () => {
     if (!rcon) return;
     try {
-      let totalKills = 0;
-      let totalDeaths = 0;
       let activeFights = 0;
       for (const stats of Object.values(botStats)) {
-        totalKills += stats.kills;
-        totalDeaths += stats.deaths;
         if (stats.active) activeFights++;
       }
 
       // Line 3: active fighters + total matches
       const totalMatches = Object.values(arenaMatches).reduce((sum, m) => sum + m.matchNum, 0);
-      await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/8","color":"aqua"},{"text":" Matches: ","color":"gray"},{"text":"${totalMatches}","color":"light_purple"}]`);
-
-      // Lines 5-12: individual bot names with kills / deaths
-      for (const [bName, team] of Object.entries(botSidebarTeam)) {
-        const s = botStats[bName];
-        if (!s) continue;
-        const color = botColor[bName];
-        await rcon.send(`team modify ${team} prefix [{"text":"${bName} ","color":"${color}"},{"text":"${s.kills}","color":"green"},{"text":"/","color":"gray"},{"text":"${s.deaths}","color":"red"}]`);
-      }
+      await rcon.send(`team modify sb03 prefix [{"text":"Fighters: ","color":"gray"},{"text":"${activeFights}/20","color":"aqua"},{"text":" Matches: ","color":"gray"},{"text":"${totalMatches}","color":"light_purple"}]`);
 
       // Line 4: per-arena match state
       const arenaStates = ['pvp', 'sumo', 'spleef', 'archery'].map(a => {
@@ -1180,6 +1290,24 @@ async function main() {
         return `{"text":"${a[0].toUpperCase()}${m.matchNum}","color":"${st}"}`;
       }).join(',{"text":" ","color":"gray"},');
       await rcon.send(`team modify sb04 prefix [${arenaStates}]`);
+
+      // Lines 5-12: per-arena leader + alive count (2 lines per arena)
+      for (const [arenaKey, team] of Object.entries(arenaSidebarTeams)) {
+        const arenaBotStats = BOT_DEFS.filter(d => d.arena === arenaKey)
+          .map(d => ({ name: d.name, ...(botStats[d.name] || {}) }))
+          .sort((a, b) => (b.kills || 0) - (a.kills || 0));
+        const leader = arenaBotStats[0];
+        const color = arenaColors[arenaKey];
+        if (leader) {
+          await rcon.send(`team modify ${team} prefix [{"text":"${arenaKey.toUpperCase()}: ","color":"${color}","bold":true},{"text":"${leader.name} ","color":"white"},{"text":"${leader.kills || 0}K","color":"green"}]`);
+        }
+      }
+      for (const [arenaKey, team] of Object.entries(arenaStatTeams)) {
+        const alive = aliveBots[arenaKey].size;
+        const state = arenaMatches[arenaKey].state;
+        const stateText = state === 'ACTIVE' ? `${alive} alive` : state.toLowerCase();
+        await rcon.send(`team modify ${team} prefix [{"text":"  ${stateText}","color":"gray","italic":true}]`);
+      }
 
       // Line 14: active bets + pool
       const allBets = Object.values(activeBets).flatMap(b => Object.entries(b));
@@ -1208,8 +1336,9 @@ async function main() {
     console.log('-'.repeat(90));
     for (const [arena, match] of Object.entries(arenaMatches)) {
       const elapsed = match.state === 'ACTIVE' ? Math.floor((Date.now() - match.startTime) / 1000) : 0;
+      const alive = aliveBots[arena].size;
       console.log(`  ${arena.padEnd(8)} | State: ${match.state.padEnd(10)} | Match #${match.matchNum} | ` +
-        `Winner: ${(match.winner || '-').padEnd(8)} | Elapsed: ${elapsed}s`);
+        `Winner: ${(match.winner || '-').padEnd(8)} | Alive: ${alive}/5 | Elapsed: ${elapsed}s`);
     }
     console.log('-'.repeat(90));
     for (const [name, stats] of Object.entries(botStats)) {

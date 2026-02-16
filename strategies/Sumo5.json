@@ -1,0 +1,11 @@
+{
+  "name": "Sumo5", "arena": "sumo", "version": 1,
+  "combat": {
+    "center_retreat_threshold": 6, "attack_range": 3.5,
+    "sprint_attack": true, "knockback_combo_delay_ms": 200,
+    "edge_awareness": true, "retreat_sprint_ms": 800,
+    "approach_style": "aggressive"
+  },
+  "notes": "Retreater — stays near center, defensive",
+  "history": []
+}
