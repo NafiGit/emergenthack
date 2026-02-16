@@ -1056,8 +1056,18 @@ async function main() {
       }).join(',{"text":" ","color":"gray"},');
       await rcon.send(`team modify sb04 prefix [${arenaStates}]`);
 
-      // Line 14: totals
-      await rcon.send(`team modify sb14 prefix [{"text":"Kills: ","color":"gray"},{"text":"${totalKills}","color":"yellow"},{"text":" Deaths: ","color":"gray"},{"text":"${totalDeaths}","color":"red"}]`);
+      // Line 14: active bets + pool
+      const allBets = Object.values(activeBets).flatMap(b => Object.entries(b));
+      const totalPool = allBets.reduce((s, [, b]) => s + b.amount, 0);
+      const betCount = allBets.length;
+      await rcon.send(`team modify sb14 prefix [{"text":"Bets: ","color":"gray"},{"text":"${betCount}","color":"aqua"},{"text":" Pool: ","color":"gray"},{"text":"${totalPool}","color":"gold"}]`);
+
+      // Line 15: coin leaderboard (#1 player)
+      const coinEntries = Object.entries(playerCoins).sort((a, b) => b[1] - a[1]);
+      if (coinEntries.length > 0) {
+        const [topName, topCoins] = coinEntries[0];
+        await rcon.send(`team modify sb15 prefix [{"text":"#1 ","color":"gold"},{"text":"${topName}","color":"white"},{"text":": ${topCoins}","color":"yellow"}]`);
+      }
 
       // Also update kills scoreboard objective per bot
       for (const [bName, stats] of Object.entries(botStats)) {

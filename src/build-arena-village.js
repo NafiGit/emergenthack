@@ -183,38 +183,49 @@ function spectateButton(x, y, z, spawn) {
   ];
 }
 
-// Build a glass spectator viewing box adjacent to an arena
-// viewSide: which wall is glass ('north'=z=z1, 'south'=z=z2, 'east'=x=x2, 'west'=x=x1)
-function buildSpectatorBox(x1, z1, x2, z2, floorY, ceilY, viewSide, arenaName) {
+// Build a glass spectator gallery wrapping all 4 sides of an arena
+// x1,z1,x2,z2: arena wall boundaries. Gallery is a 3-wide corridor ring outside these walls.
+function buildSpectatorGallery(x1, z1, x2, z2, floorY, height) {
   const cmds = [];
+  const ceilY = floorY + height;
 
-  // Floor + ceiling
-  cmds.push(`fill ${x1} ${floorY} ${z1} ${x2} ${floorY} ${z2} quartz_block`);
-  cmds.push(`fill ${x1} ${ceilY} ${z1} ${x2} ${ceilY} ${z2} quartz_block`);
+  // Floor (quartz_block) — 4 strips forming a ring
+  cmds.push(`fill ${x1-3} ${floorY} ${z1-3} ${x2+3} ${floorY} ${z1-1} quartz_block`);
+  cmds.push(`fill ${x1-3} ${floorY} ${z2+1} ${x2+3} ${floorY} ${z2+3} quartz_block`);
+  cmds.push(`fill ${x2+1} ${floorY} ${z1} ${x2+3} ${floorY} ${z2} quartz_block`);
+  cmds.push(`fill ${x1-3} ${floorY} ${z1} ${x1-1} ${floorY} ${z2} quartz_block`);
 
-  // Interior air
-  cmds.push(`fill ${x1+1} ${floorY+1} ${z1+1} ${x2-1} ${ceilY-1} ${z2-1} air`);
+  // Ceiling (glass) — 4 strips
+  cmds.push(`fill ${x1-3} ${ceilY} ${z1-3} ${x2+3} ${ceilY} ${z1-1} glass`);
+  cmds.push(`fill ${x1-3} ${ceilY} ${z2+1} ${x2+3} ${ceilY} ${z2+3} glass`);
+  cmds.push(`fill ${x2+1} ${ceilY} ${z1} ${x2+3} ${ceilY} ${z2} glass`);
+  cmds.push(`fill ${x1-3} ${ceilY} ${z1} ${x1-1} ${ceilY} ${z2} glass`);
 
-  // All 4 walls as solid first
-  cmds.push(`fill ${x1} ${floorY+1} ${z1} ${x2} ${ceilY-1} ${z1} stone_bricks`); // north wall (z=z1)
-  cmds.push(`fill ${x1} ${floorY+1} ${z2} ${x2} ${ceilY-1} ${z2} stone_bricks`); // south wall (z=z2)
-  cmds.push(`fill ${x1} ${floorY+1} ${z1} ${x1} ${ceilY-1} ${z2} stone_bricks`); // west wall (x=x1)
-  cmds.push(`fill ${x2} ${floorY+1} ${z1} ${x2} ${ceilY-1} ${z2} stone_bricks`); // east wall (x=x2)
+  // Outer walls (stone_bricks) — 4 faces
+  cmds.push(`fill ${x1-3} ${floorY+1} ${z1-3} ${x2+3} ${ceilY-1} ${z1-3} stone_bricks`);
+  cmds.push(`fill ${x1-3} ${floorY+1} ${z2+3} ${x2+3} ${ceilY-1} ${z2+3} stone_bricks`);
+  cmds.push(`fill ${x2+3} ${floorY+1} ${z1-3} ${x2+3} ${ceilY-1} ${z2+3} stone_bricks`);
+  cmds.push(`fill ${x1-3} ${floorY+1} ${z1-3} ${x1-3} ${ceilY-1} ${z2+3} stone_bricks`);
 
-  // Replace the viewing wall with clear glass
-  switch (viewSide) {
-    case 'north': cmds.push(`fill ${x1} ${floorY+1} ${z1} ${x2} ${ceilY-1} ${z1} glass`); break;
-    case 'south': cmds.push(`fill ${x1} ${floorY+1} ${z2} ${x2} ${ceilY-1} ${z2} glass`); break;
-    case 'west':  cmds.push(`fill ${x1} ${floorY+1} ${z1} ${x1} ${ceilY-1} ${z2} glass`); break;
-    case 'east':  cmds.push(`fill ${x2} ${floorY+1} ${z1} ${x2} ${ceilY-1} ${z2} glass`); break;
+  // Interior air — 4 strips, overlapping at corners for walkability
+  cmds.push(`fill ${x1-2} ${floorY+1} ${z1-2} ${x2+2} ${ceilY-1} ${z1-1} air`);
+  cmds.push(`fill ${x1-2} ${floorY+1} ${z2+1} ${x2+2} ${ceilY-1} ${z2+2} air`);
+  cmds.push(`fill ${x2+1} ${floorY+1} ${z1-2} ${x2+2} ${ceilY-1} ${z2+2} air`);
+  cmds.push(`fill ${x1-2} ${floorY+1} ${z1-2} ${x1-1} ${ceilY-1} ${z2+2} air`);
+
+  // Lighting — sea lanterns in ceiling every 5 blocks + corners
+  for (let x = x1; x <= x2; x += 5) {
+    cmds.push(`setblock ${x} ${ceilY} ${z1-2} sea_lantern`);
+    cmds.push(`setblock ${x} ${ceilY} ${z2+2} sea_lantern`);
   }
-
-  // Interior air again (ensure walls didn't fill interior)
-  cmds.push(`fill ${x1+1} ${floorY+1} ${z1+1} ${x2-1} ${ceilY-1} ${z2-1} air`);
-
-  // Lighting (sea lanterns on ceiling corners)
-  cmds.push(`setblock ${x1+1} ${ceilY} ${z1+1} sea_lantern`);
-  cmds.push(`setblock ${x2-1} ${ceilY} ${z2-1} sea_lantern`);
+  for (let z = z1; z <= z2; z += 5) {
+    cmds.push(`setblock ${x2+2} ${ceilY} ${z} sea_lantern`);
+    cmds.push(`setblock ${x1-2} ${ceilY} ${z} sea_lantern`);
+  }
+  cmds.push(`setblock ${x1-2} ${ceilY} ${z1-2} sea_lantern`);
+  cmds.push(`setblock ${x2+2} ${ceilY} ${z1-2} sea_lantern`);
+  cmds.push(`setblock ${x1-2} ${ceilY} ${z2+2} sea_lantern`);
+  cmds.push(`setblock ${x2+2} ${ceilY} ${z2+2} sea_lantern`);
 
   return cmds;
 }
@@ -355,12 +366,13 @@ function setupScoreboards() {
     `scoreboard players set \u00a7c\u00a7r sidebar 4`,
     `scoreboard players set \u00a7d\u00a7r sidebar 3`,
     `scoreboard players set \u00a7e\u00a7r sidebar 2`,
+    `scoreboard players set \u00a7f\u00a7r sidebar 1`,
 
     // Create teams for each line (prefix controls displayed text)
     'team add sb01', 'team add sb02', 'team add sb03', 'team add sb04',
     'team add sb05', 'team add sb06', 'team add sb07', 'team add sb08',
     'team add sb09', 'team add sb10', 'team add sb11', 'team add sb12',
-    'team add sb13', 'team add sb14', 'team add sb15',
+    'team add sb13', 'team add sb14', 'team add sb15', 'team add sb16',
 
     // Join invisible players to teams
     `team join sb01 \u00a70\u00a7r`, `team join sb02 \u00a71\u00a7r`,
@@ -370,7 +382,7 @@ function setupScoreboards() {
     `team join sb09 \u00a78\u00a7r`, `team join sb10 \u00a79\u00a7r`,
     `team join sb11 \u00a7a\u00a7r`, `team join sb12 \u00a7b\u00a7r`,
     `team join sb13 \u00a7c\u00a7r`, `team join sb14 \u00a7d\u00a7r`,
-    `team join sb15 \u00a7e\u00a7r`,
+    `team join sb15 \u00a7e\u00a7r`, `team join sb16 \u00a7f\u00a7r`,
 
     // Set line text via team prefixes
     'team modify sb01 prefix {"text":"Arena Village","color":"white"}',
@@ -386,9 +398,11 @@ function setupScoreboards() {
     'team modify sb10 prefix [{"text":"Spleef2","color":"aqua"},{"text":" 0K 0D","color":"gray"}]',
     'team modify sb11 prefix [{"text":"Archer1","color":"red"},{"text":" 0K 0D","color":"gray"}]',
     'team modify sb12 prefix [{"text":"Archer2","color":"red"},{"text":" 0K 0D","color":"gray"}]',
-    'team modify sb13 prefix {"text":""}',
-    'team modify sb14 prefix [{"text":"Kills: ","color":"gray"},{"text":"0","color":"yellow"},{"text":" Deaths: ","color":"gray"},{"text":"0","color":"red"}]',
-    'team modify sb15 prefix [{"text":"play.mineforge.gg","color":"dark_gray","italic":true}]',
+    // Betting section (sb13-sb16 — updated live by arena-bot.js)
+    'team modify sb13 prefix [{"text":"── ","color":"dark_gray"},{"text":"BETTING","color":"light_purple","bold":true},{"text":" ──","color":"dark_gray"}]',
+    'team modify sb14 prefix [{"text":"Bets: ","color":"gray"},{"text":"0","color":"aqua"},{"text":" Pool: ","color":"gray"},{"text":"0","color":"gold"}]',
+    'team modify sb15 prefix [{"text":"No bettors yet","color":"gray","italic":true}]',
+    'team modify sb16 prefix [{"text":"!bet <bot> | !coins","color":"dark_gray","italic":true}]',
 
     // Show death messages for kill tracking
     'gamerule showDeathMessages true',
@@ -482,7 +496,7 @@ function buildHub() {
   cmds.push(`fill ${cx-2} ${Y+5} ${cz+R-1} ${cx+2} ${Y+5} ${cz+R-1} red_concrete`);
   cmds.push(`setblock ${cx} ${Y+4} ${cz+R-1} oak_wall_sign[facing=north]{Text1:'{"text":"[PvP Arena]","color":"red","bold":true}',Text2:'{"text":"Sword 1v1"}',Text3:'{"text":">> SPECTATE >>","color":"gold"}',Text4:'{"text":"Click button below","color":"gray"}'}`);
   cmds.push(`setblock ${cx} ${Y+2} ${cz+R-1} stone_button[face=wall,facing=north]`);
-  cmds.push(...spectateButton(cx, Y+1, cz+R-1, { x: 0, y: Y, z: 70 }));
+  cmds.push(...spectateButton(cx, Y+1, cz+R-1, { x: 14, y: Y, z: 41 }));
 
   // EAST WALL — Sumo Spectate
   cmds.push(`fill ${cx+R-1} ${Y} ${cz-3} ${cx+R-1} ${Y+5} ${cz-3} polished_blackstone`);
@@ -492,7 +506,7 @@ function buildHub() {
   cmds.push(`fill ${cx+R-1} ${Y+5} ${cz-2} ${cx+R-1} ${Y+5} ${cz+2} blue_concrete`);
   cmds.push(`setblock ${cx+R-1} ${Y+4} ${cz} oak_wall_sign[facing=west]{Text1:'{"text":"[Sumo Arena]","color":"blue","bold":true}',Text2:'{"text":"Knockback 1v1"}',Text3:'{"text":">> SPECTATE >>","color":"gold"}',Text4:'{"text":"Click button below","color":"gray"}'}`);
   cmds.push(`setblock ${cx+R-1} ${Y+2} ${cz} stone_button[face=wall,facing=west]`);
-  cmds.push(...spectateButton(cx+R-1, Y+1, cz, { x: 70, y: 11, z: 0 }));
+  cmds.push(...spectateButton(cx+R-1, Y+1, cz, { x: 41, y: 11, z: -14 }));
 
   // WEST WALL — Spleef Spectate
   cmds.push(`fill ${cx-R+1} ${Y} ${cz-3} ${cx-R+1} ${Y+5} ${cz-3} polished_blackstone`);
@@ -502,7 +516,7 @@ function buildHub() {
   cmds.push(`fill ${cx-R+1} ${Y+5} ${cz-2} ${cx-R+1} ${Y+5} ${cz+2} green_concrete`);
   cmds.push(`setblock ${cx-R+1} ${Y+4} ${cz} oak_wall_sign[facing=east]{Text1:'{"text":"[Spleef Arena]","color":"green","bold":true}',Text2:'{"text":"Break the Floor!"}',Text3:'{"text":">> SPECTATE >>","color":"gold"}',Text4:'{"text":"Click button below","color":"gray"}'}`);
   cmds.push(`setblock ${cx-R+1} ${Y+2} ${cz} stone_button[face=wall,facing=east]`);
-  cmds.push(...spectateButton(cx-R+1, Y+1, cz, { x: -70, y: 16, z: 0 }));
+  cmds.push(...spectateButton(cx-R+1, Y+1, cz, { x: -41, y: 16, z: -14 }));
 
   // NORTH WALL — Archery Spectate
   cmds.push(`fill ${cx-3} ${Y} ${cz-R+1} ${cx-3} ${Y+5} ${cz-R+1} polished_blackstone`);
@@ -512,7 +526,7 @@ function buildHub() {
   cmds.push(`fill ${cx-2} ${Y+5} ${cz-R+1} ${cx+2} ${Y+5} ${cz-R+1} yellow_concrete`);
   cmds.push(`setblock ${cx} ${Y+4} ${cz-R+1} oak_wall_sign[facing=south]{Text1:'{"text":"[Archery Arena]","color":"yellow","bold":true}',Text2:'{"text":"Bow Duel 1v1"}',Text3:'{"text":">> SPECTATE >>","color":"gold"}',Text4:'{"text":"Click button below","color":"gray"}'}`);
   cmds.push(`setblock ${cx} ${Y+2} ${cz-R+1} stone_button[face=wall,facing=south]`);
-  cmds.push(...spectateButton(cx, Y+1, cz-R+1, { x: 0, y: Y, z: -65 }));
+  cmds.push(...spectateButton(cx, Y+1, cz-R+1, { x: 16, y: Y, z: -46 }));
 
   return cmds;
 }
@@ -569,16 +583,22 @@ function buildPvPArena() {
   // Timer + equip chain (underground at y=1)
   cmds.push(...buildTimerChain(ax - 5, az + 15, 'pvp', ARENA_ITEMS.pvp));
 
-  // ─── Spectator Box (south side, outside arena detection area) ───
-  // Arena south wall is at z=67 (az+12). Box: x=[-6,6], z=[68,72], floor y=G (same as fighters)
-  cmds.push(...buildSpectatorBox(-6, 68, 6, 72, G, G + 5, 'north', 'PvP Arena'));
-  // Replace part of arena south wall with glass for viewing
-  cmds.push(`fill ${ax-6} ${Y} ${az+12} ${ax+6} ${G+4} ${az+12} glass`);
-  // Return button inside spectator box (on south wall interior)
-  cmds.push(`setblock 0 ${Y} 72 quartz_block`);
-  cmds.push(`setblock 0 ${Y+1} 71 oak_wall_sign[facing=north]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock 0 ${Y} 71 stone_button[face=wall,facing=north]`);
-  cmds.push(...returnButton(0, G, 71));
+  // ─── Spectator Gallery (wraps all 4 sides of arena) ───
+  // Arena walls: x=[-12,12] z=[43,67], gallery floor at fighter level
+  cmds.push(...buildSpectatorGallery(-12, 43, 12, 67, G, 4));
+  // Replace arena walls with glass for viewing (y=4 to y=6)
+  cmds.push(`fill ${ax-11} ${Y} ${az-12} ${ax+11} ${G+3} ${az-12} glass`);
+  cmds.push(`fill ${ax-11} ${Y} ${az+12} ${ax+11} ${G+3} ${az+12} glass`);
+  cmds.push(`fill ${ax-12} ${Y} ${az-11} ${ax-12} ${G+3} ${az+11} glass`);
+  cmds.push(`fill ${ax+12} ${Y} ${az-11} ${ax+12} ${G+3} ${az+11} glass`);
+  // Re-cut arena entrance (glass replacement overwrites it)
+  cmds.push(`fill ${ax-1} ${Y} ${az-12} ${ax+1} ${Y+3} ${az-12} air`);
+  // Cut entrance passthrough in gallery north corridor
+  cmds.push(`fill ${ax-1} ${Y} ${az-15} ${ax+1} ${G+3} ${az-13} air`);
+  // Return button in gallery (NE corner of north corridor)
+  cmds.push(`setblock ${ax+13} ${Y+1} ${az-14} oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
+  cmds.push(`setblock ${ax+13} ${Y} ${az-14} stone_button[face=wall,facing=south]`);
+  cmds.push(...returnButton(ax + 13, G, az - 14));
 
   return cmds;
 }
@@ -651,14 +671,21 @@ function buildSumoArena() {
   // Timer + equip chain
   cmds.push(...buildTimerChain(ax - 5, az + 15, 'sumo', ARENA_ITEMS.sumo));
 
-  // ─── Spectator Box (east side, outside arena detection area) ───
-  // Arena detection ends at x=67. Box: x=[68,72], z=[-4,4], floor y=platY (same as fighters)
-  cmds.push(...buildSpectatorBox(68, -4, 72, 4, platY, platY + 5, 'west', 'Sumo Arena'));
-  // Return button inside spectator box (on east wall interior)
-  cmds.push(`setblock 72 ${platY+1} 0 quartz_block`);
-  cmds.push(`setblock 71 ${platY+2} 0 oak_wall_sign[facing=west]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock 71 ${platY+1} 0 stone_button[face=wall,facing=west]`);
-  cmds.push(...returnButton(71, platY, 0));
+  // ─── Spectator Gallery (wraps all 4 sides of detection area) ───
+  // Detection area: x=[43,67] z=[-12,12], gallery floor at platform level
+  cmds.push(...buildSpectatorGallery(43, -12, 67, 12, platY, 4));
+  // Add glass inner walls (sumo has no arena walls, open platform)
+  cmds.push(`fill 43 ${platY+1} -12 67 ${platY+3} -12 glass`);
+  cmds.push(`fill 43 ${platY+1} 12 67 ${platY+3} 12 glass`);
+  cmds.push(`fill 67 ${platY+1} -12 67 ${platY+3} 12 glass`);
+  cmds.push(`fill 43 ${platY+1} -12 43 ${platY+3} 12 glass`);
+  // Cut entrance passthrough from bridge (west side)
+  cmds.push(`fill 40 ${platY+1} -1 40 ${platY+3} 1 air`);
+  cmds.push(`fill 43 ${platY+1} -1 43 ${platY+3} 1 air`);
+  // Return button in gallery (NW corner of north corridor)
+  cmds.push(`setblock 41 ${platY+2} -14 oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
+  cmds.push(`setblock 41 ${platY+1} -14 stone_button[face=wall,facing=south]`);
+  cmds.push(...returnButton(41, platY, -14));
 
   return cmds;
 }
@@ -727,16 +754,18 @@ function buildSpleefArena() {
   // Timer + equip chain (with snow regen on match end)
   cmds.push(...buildTimerChain(ax - 5, az + 15, 'spleef', ARENA_ITEMS.spleef, SPLEEF_REGEN));
 
-  // ─── Spectator Box (west side, outside arena detection area) ───
-  // Arena detection starts at x=-67. Box: x=[-72,-68], z=[-6,6]
-  // Floor at y=15 (top snow layer where combat starts), ceiling y=20
-  cmds.push(...buildSpectatorBox(-72, -6, -68, 6, 15, 20, 'east', 'Spleef Arena'));
-  // Spleef already has glass walls, so viewing works through existing west-side glass at x=-67
-  // Return button inside spectator box (on west wall interior)
-  cmds.push(`setblock -72 16 0 quartz_block`);
-  cmds.push(`setblock -71 17 0 oak_wall_sign[facing=east]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock -71 16 0 stone_button[face=wall,facing=east]`);
-  cmds.push(...returnButton(-71, 15, 0));
+  // ─── Spectator Gallery (wraps all 4 sides of arena) ───
+  // Arena walls: x=[-67,-43] z=[-12,12], gallery floor at top snow layer level
+  cmds.push(...buildSpectatorGallery(-67, -12, -43, 12, 15, 5));
+  // Spleef already has glass walls — no replacement needed, spectators see through them
+  // Cut entrance passthrough in gallery east corridor (bridge enters from east)
+  cmds.push(`fill -40 16 -1 -40 19 1 air`);
+  // Re-add bridge floor through gallery east corridor
+  cmds.push(`fill -42 15 -1 -40 15 1 quartz_block`);
+  // Return button in gallery (NE corner of north corridor)
+  cmds.push(`setblock -41 17 -14 oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
+  cmds.push(`setblock -41 16 -14 stone_button[face=wall,facing=south]`);
+  cmds.push(...returnButton(-41, 15, -14));
 
   return cmds;
 }
@@ -797,16 +826,22 @@ function buildArcheryArena() {
   // Timer + equip chain
   cmds.push(...buildTimerChain(ax - 5, az - 15, 'archery', ARENA_ITEMS.archery));
 
-  // ─── Spectator Box (north side, outside arena detection area) ───
-  // Arena detection starts at z=-62. Box: x=[-6,6], z=[-67,-63], floor y=G (same as fighters)
-  cmds.push(...buildSpectatorBox(-6, -67, 6, -63, G, G + 5, 'south', 'Archery Arena'));
-  // Replace part of arena north wall with glass for viewing
-  cmds.push(`fill ${ax-6} ${Y} ${az-7} ${ax+6} ${G+4} ${az-7} glass`);
-  // Return button inside spectator box (on north wall interior)
-  cmds.push(`setblock 0 ${Y} -67 quartz_block`);
-  cmds.push(`setblock 0 ${Y+1} -66 oak_wall_sign[facing=south]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock 0 ${Y} -66 stone_button[face=wall,facing=south]`);
-  cmds.push(...returnButton(0, G, -66));
+  // ─── Spectator Gallery (wraps all 4 sides of arena) ───
+  // Arena walls: x=[-14,14] z=[-62,-48], gallery floor at fighter level
+  cmds.push(...buildSpectatorGallery(-14, -62, 14, -48, G, 4));
+  // Replace arena walls with glass for viewing (y=4 to y=6)
+  cmds.push(`fill ${ax-13} ${Y} ${az-7} ${ax+13} ${G+3} ${az-7} glass`);
+  cmds.push(`fill ${ax-13} ${Y} ${az+7} ${ax+13} ${G+3} ${az+7} glass`);
+  cmds.push(`fill ${ax-14} ${Y} ${az-6} ${ax-14} ${G+3} ${az+6} glass`);
+  cmds.push(`fill ${ax+14} ${Y} ${az-6} ${ax+14} ${G+3} ${az+6} glass`);
+  // Re-cut arena entrance (glass replacement overwrites it)
+  cmds.push(`fill ${ax-1} ${Y} ${az+7} ${ax+1} ${Y+3} ${az+7} air`);
+  // Cut entrance passthrough in gallery south corridor
+  cmds.push(`fill ${ax-1} ${Y} ${az+8} ${ax+1} ${G+3} ${az+10} air`);
+  // Return button in gallery (SE corner of south corridor)
+  cmds.push(`setblock ${ax+16} ${Y+1} ${az+9} oak_wall_sign[facing=north]{Text1:'{"text":"[Return]","color":"aqua","bold":true}',Text2:'{"text":"Back to Hub"}',Text3:'{"text":"Click button"}',Text4:'{"text":"below","color":"gray"}'}`);
+  cmds.push(`setblock ${ax+16} ${Y} ${az+9} stone_button[face=wall,facing=north]`);
+  cmds.push(...returnButton(ax + 16, G, az + 9));
 
   return cmds;
 }
