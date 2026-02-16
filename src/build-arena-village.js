@@ -96,11 +96,8 @@ async function main() {
   console.log('[3/10] Building Central Hub...');
   await runCmds(rcon, buildHub());
 
-  console.log('[4/10] Building hub item system (spectate wands)...');
-  await runCmds(rcon, buildItemGiverChain());
-
-  console.log('[4.5/10] Building bet detection chain...');
-  await runCmds(rcon, buildBetDetectionChain());
+  console.log('[4/10] Building item system (navigation + betting + buffs)...');
+  await runCmds(rcon, buildItemSystem());
 
   console.log('[5/10] Building PvP Arena (south)...');
   await runCmds(rcon, buildPvPArena());
@@ -244,6 +241,7 @@ const SPECTATE_ITEMS = [
   { cmd: 2, name: 'Sumo',    color: 'blue',   tp: '41 11 -14' },
   { cmd: 3, name: 'Spleef',  color: 'green',  tp: '-41 16 -14' },
   { cmd: 4, name: 'Archery', color: 'yellow',  tp: '16 4 -46' },
+  { cmd: 5, name: 'Hub',     color: 'white',  tp: '0 4 -8' },
 ];
 
 // Betting item CustomModelData mapping (2 per arena)
@@ -261,79 +259,76 @@ const BET_ITEMS = [
 // First bot per arena (receives whisper messages for bet processing)
 const FIRST_BOT = { pvp: 'Pvp1', sumo: 'Sumo1', spleef: 'Spleef1', archery: 'Archer1' };
 
-function buildItemGiverChain() {
+function buildItemSystem() {
   const cmds = [];
-  const hubSel = 'x=-14,y=0,z=-14,dx=28,dy=15,dz=28';
 
-  // --- Chain A: Item Giver (y=1, x=-20, z=-20, east) ---
+  // --- Chain A: Universal Item Giver (y=1, x=-20, z=-20, east) ---
+  // Gives 5 navigation wands to any player without has_wands tag (refreshes on navigation)
   let bx = -20, bz = -20, idx = 0;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 10} 1 ${bz} air`); // clear space
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 10} 1 ${bz} air`);
 
-  // First: clear any leftover sticks (prevents duplicates on rebuild)
+  // Clear leftover sticks before giving (prevents duplicates)
   cmds.push(repeatBlock(bx + idx, 1, bz, 'east',
-    `execute as @a[${hubSel},tag=!has_wands,tag=!bot] run clear @s minecraft:carrot_on_a_stick`));
+    `execute as @a[tag=!has_wands,tag=!bot] run clear @s minecraft:carrot_on_a_stick`));
   idx++;
 
   for (const item of SPECTATE_ITEMS) {
-    const itemNBT = `{display:{Name:'{"text":"[${item.name}] Spectate","color":"${item.color}","bold":true,"italic":false}'},CustomModelData:${item.cmd}}`;
+    const itemNBT = `{display:{Name:'{"text":"[${item.name}]","color":"${item.color}","bold":true,"italic":false}'},CustomModelData:${item.cmd}}`;
     cmds.push(chainBlock(bx + idx, 1, bz, 'east',
-      `execute as @a[${hubSel},tag=!has_wands,tag=!bot] at @s run give @s minecraft:carrot_on_a_stick${itemNBT} 1`));
+      `execute as @a[tag=!has_wands,tag=!bot] at @s run give @s minecraft:carrot_on_a_stick${itemNBT} 1`));
     idx++;
   }
-  // Tag after all gives (same tick, tag applied last so all gives fire)
   cmds.push(chainBlock(bx + idx, 1, bz, 'east',
-    `execute as @a[${hubSel},tag=!has_wands,tag=!bot] run tag @s add has_wands`));
+    `execute as @a[tag=!has_wands,tag=!bot] run tag @s add has_wands`));
 
-  // --- Chain B: Right-click TP detection (y=1, x=-20, z=-25, east) ---
+  // --- Chain B: Unified right-click detection (y=1, x=-20, z=-25, east) ---
+  // Handles spectate TP (CMD 1-5) + betting (CMD 11-18) in ONE chain (no dual-reset bug)
   bx = -20; bz = -25; idx = 0;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 8} 1 ${bz} air`);
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 26} 1 ${bz} air`);
 
+  // Spectate navigation: TP + mark for item refresh
   for (const item of SPECTATE_ITEMS) {
     const blockFn = idx === 0 ? repeatBlock : chainBlock;
     cmds.push(blockFn(bx + idx, 1, bz, 'east',
       `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] at @s run tp @s ${item.tp}`));
     idx++;
+    cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+      `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] run tag @s add nav_tp`));
+    idx++;
   }
-  // Reset score after all checks
+
+  // React-style refresh: clear items + remove tag → giver re-gives next tick
+  cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+    `execute as @a[tag=nav_tp] run clear @s minecraft:carrot_on_a_stick`));
+  idx++;
+  cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+    `tag @a[tag=nav_tp] remove has_wands`));
+  idx++;
+  cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+    `tag @a[tag=nav_tp] remove nav_tp`));
+  idx++;
+
+  // Betting detection: MSG to bot (CMD 11-18)
+  for (const item of BET_ITEMS) {
+    const firstBot = FIRST_BOT[item.arena];
+    cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+      `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] run msg ${firstBot} BET:${item.arena}:${item.choice}`));
+    idx++;
+  }
+
+  // Single reset for ALL right-click detections
   cmds.push(chainBlock(bx + idx, 1, bz, 'east',
     `scoreboard players set @a[scores={use_stick=1..}] use_stick 0`));
 
-  // --- Chain C: Tag reset when leaving hub (y=1, x=-20, z=-30) ---
+  // --- Chain C: Infinite food + health + no item drops (y=1, x=-20, z=-30) ---
   bx = -20; bz = -30;
-  cmds.push(`setblock ${bx} 1 ${bz} air`);
-  cmds.push(repeatBlock(bx, 1, bz, 'east',
-    `execute as @a[tag=has_wands] unless entity @s[${hubSel}] run tag @s remove has_wands`));
-
-  // --- Chain D: Infinite food + health for spectators (y=1, x=-20, z=-32) ---
-  bx = -20; bz = -32;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 1} 1 ${bz} air`);
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 2} 1 ${bz} air`);
   cmds.push(repeatBlock(bx, 1, bz, 'east',
     `effect give @a[tag=!bot] minecraft:saturation 30 0 true`));
   cmds.push(chainBlock(bx + 1, 1, bz, 'east',
     `effect give @a[tag=!bot] minecraft:resistance 30 4 true`));
-
-  return cmds;
-}
-
-function buildBetDetectionChain() {
-  const cmds = [];
-
-  // --- Betting detection chain (y=1, x=-20, z=-35, east) ---
-  // When a player right-clicks a betting stick, send /msg to the bot
-  let bx = -20, bz = -35, idx = 0;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 12} 1 ${bz} air`);
-
-  for (const item of BET_ITEMS) {
-    const blockFn = idx === 0 ? repeatBlock : chainBlock;
-    const firstBot = FIRST_BOT[item.arena];
-    cmds.push(blockFn(bx + idx, 1, bz, 'east',
-      `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] run msg ${firstBot} BET:${item.arena}:${item.choice}`));
-    idx++;
-  }
-  // Reset score (shared with spectate chain — whichever fires first resets)
-  // This handles any leftover use_stick from betting clicks
-  cmds.push(chainBlock(bx + idx, 1, bz, 'east',
-    `scoreboard players set @a[scores={use_stick=1..}] use_stick 0`));
+  cmds.push(chainBlock(bx + 2, 1, bz, 'east',
+    `kill @e[type=item,x=-80,y=0,z=-80,dx=160,dy=30,dz=160]`));
 
   return cmds;
 }
