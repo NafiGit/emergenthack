@@ -418,7 +418,7 @@ function buildTimerChain(startX, startZ, arenaKey, equipItems = [], resetCmds = 
   let idx = 0;
 
   // Clear space for command blocks (generous width)
-  const totalBlocks = 8 + equipItems.length + resetCmds.length + 2;
+  const totalBlocks = 9 + equipItems.length + resetCmds.length + 2;
   cmds.push(`fill ${startX} ${by} ${startZ} ${startX + totalBlocks} ${by} ${startZ} air`);
 
   // Block: Repeating — increment timer when players in area
@@ -434,6 +434,10 @@ function buildTimerChain(startX, startZ, arenaKey, equipItems = [], resetCmds = 
   // Block: Chain — clear inventory on tick 2 (just entered arena)
   cmds.push(chainBlock(startX + idx, by, startZ, 'east',
     `execute if score ${timerName} timer matches 2 run clear @a[${area}]`));
+  idx++;
+  // Remove has_wands so the item giver re-gives navigation wands after arena clear
+  cmds.push(chainBlock(startX + idx, by, startZ, 'east',
+    `execute if score ${timerName} timer matches 2 run tag @a[${area}] remove has_wands`));
   idx++;
 
   // Blocks: Chain — give each item on tick 3
@@ -567,26 +571,26 @@ function setupScoreboards() {
     `team join sb13 \u00a7c\u00a7r`, `team join sb14 \u00a7d\u00a7r`,
     `team join sb15 \u00a7e\u00a7r`, `team join sb16 \u00a7f\u00a7r`,
 
-    // Set line text via team prefixes — clean Hypixel-style layout
-    // sb01(16)=subtitle  sb02(15)=blank  sb03-06(14-11)=arenas  sb07(10)=blank
-    // sb08(9)=matches  sb09(8)=best  sb10(7)=blank  sb11(6)=betting header
-    // sb12(5)=pool  sb13(4)=#1  sb14(3)=#2/#3  sb15(2)=hint  sb16(1)=blank
-    'team modify sb01 prefix {"text":"Arena Village","color":"white"}',
-    'team modify sb02 prefix {"text":""}',
-    'team modify sb03 prefix [{"text":"PVP ","color":"yellow","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb04 prefix [{"text":"SUMO ","color":"green","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    // Sidebar layout: 2 lines per arena (matchup + all bot kills) + stats + leaderboard
+    // sb01-02=PVP  sb03-04=SUMO  sb05-06=SPLEEF  sb07-08=ARCHERY
+    // sb09=blank  sb10=matches  sb11=best  sb12=blank
+    // sb13=leaderboard  sb14=#1  sb15=#2/#3  sb16=pool
+    'team modify sb01 prefix [{"text":"PVP ","color":"yellow","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb02 prefix [{"text":" loading...","color":"dark_gray"}]',
+    'team modify sb03 prefix [{"text":"SUMO ","color":"green","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb04 prefix [{"text":" loading...","color":"dark_gray"}]',
     'team modify sb05 prefix [{"text":"SPLEEF ","color":"aqua","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb06 prefix [{"text":"ARCHERY ","color":"red","bold":true},{"text":"waiting","color":"gray","italic":true}]',
-    'team modify sb07 prefix {"text":""}',
-    'team modify sb08 prefix [{"text":"Matches: ","color":"gray"},{"text":"0","color":"light_purple"}]',
-    'team modify sb09 prefix [{"text":"Best: ","color":"gray"},{"text":"─","color":"dark_gray"}]',
-    'team modify sb10 prefix {"text":""}',
-    'team modify sb11 prefix [{"text":"── ","color":"dark_gray"},{"text":"BETTING","color":"light_purple","bold":true},{"text":" ──","color":"dark_gray"}]',
-    'team modify sb12 prefix [{"text":"Pool: ","color":"gray"},{"text":"0","color":"gold"},{"text":" · Bets: ","color":"dark_gray"},{"text":"0","color":"aqua"}]',
-    'team modify sb13 prefix [{"text":"No bettors yet","color":"gray","italic":true}]',
-    'team modify sb14 prefix {"text":""}',
-    'team modify sb15 prefix [{"text":"Spectate to bet!","color":"dark_gray","italic":true}]',
-    'team modify sb16 prefix {"text":""}',
+    'team modify sb06 prefix [{"text":" loading...","color":"dark_gray"}]',
+    'team modify sb07 prefix [{"text":"ARCHERY ","color":"red","bold":true},{"text":"waiting","color":"gray","italic":true}]',
+    'team modify sb08 prefix [{"text":" loading...","color":"dark_gray"}]',
+    'team modify sb09 prefix {"text":""}',
+    'team modify sb10 prefix [{"text":"Matches: ","color":"gray"},{"text":"0","color":"light_purple"}]',
+    'team modify sb11 prefix [{"text":"Best: ","color":"gray"},{"text":"─","color":"dark_gray"}]',
+    'team modify sb12 prefix {"text":""}',
+    'team modify sb13 prefix [{"text":"── ","color":"dark_gray"},{"text":"LEADERBOARD","color":"light_purple","bold":true},{"text":" ──","color":"dark_gray"}]',
+    'team modify sb14 prefix [{"text":"No bettors yet","color":"gray","italic":true}]',
+    'team modify sb15 prefix {"text":""}',
+    'team modify sb16 prefix [{"text":"Pool: ","color":"gray"},{"text":"0","color":"gold"},{"text":" · ","color":"dark_gray"},{"text":"0","color":"aqua"},{"text":" bets","color":"gray"}]',
 
     // Show death messages for kill tracking
     'gamerule showDeathMessages true',

@@ -766,8 +766,8 @@ async function sumoTick(bot, name, target) {
   const strat = botStrategies[name];
   const retreatThresh = strat?.combat?.center_retreat_threshold ?? 3;
   const range = strat?.combat?.attack_range ?? 3.5;
-  const comboDelay = strat?.combat?.knockback_combo_delay_ms ?? 200;
-  const retreatSprint = strat?.combat?.retreat_sprint_ms ?? 400;
+  const comboDelay = strat?.combat?.knockback_combo_delay_ms ?? 400;   // 8 ticks forward after hit
+  const retreatSprint = strat?.combat?.retreat_sprint_ms ?? 500;
 
   const dist = bot.entity.position.distanceTo(target.position);
   const pos = bot.entity.position;
@@ -1242,66 +1242,77 @@ async function main() {
     console.log(`[${ts()}] Game loop started: ${arena}`);
   }
 
-  // Scoreboard sidebar updater — clean single-line-per-arena + top 3 bettors
+  // Scoreboard sidebar updater — 2 lines per arena + leaderboard
   const arenaColors = { pvp: 'yellow', sumo: 'green', spleef: 'aqua', archery: 'red' };
-  const arenaLines = { pvp: 'sb03', sumo: 'sb04', spleef: 'sb05', archery: 'sb06' };
+  const arenaTeams = [
+    { arena: 'pvp',     matchLine: 'sb01', statsLine: 'sb02' },
+    { arena: 'sumo',    matchLine: 'sb03', statsLine: 'sb04' },
+    { arena: 'spleef',  matchLine: 'sb05', statsLine: 'sb06' },
+    { arena: 'archery', matchLine: 'sb07', statsLine: 'sb08' },
+  ];
 
   setInterval(async () => {
     if (!rcon) return;
     try {
-      // --- Arena lines (sb03-sb06): matchup with K/D integrated ---
-      for (const arenaKey of ['pvp', 'sumo', 'spleef', 'archery']) {
-        const line = arenaLines[arenaKey];
+      // --- Arena lines: matchup (odd) + all bot kills (even) ---
+      for (const { arena: arenaKey, matchLine, statsLine } of arenaTeams) {
         const color = arenaColors[arenaKey];
         const fighters = currentFighters[arenaKey];
         const state = arenaMatches[arenaKey].state;
 
+        // Line 1: matchup with current fighters' K/D
         if (fighters.length === 2 && (state === 'ACTIVE' || state === 'BETTING' || state === 'COUNTDOWN')) {
           const f1 = fighters[0], f2 = fighters[1];
           const s1 = botStats[f1] || {}, s2 = botStats[f2] || {};
           const stColor = state === 'ACTIVE' ? 'green' : state === 'BETTING' ? 'gold' : 'yellow';
-          await rcon.send(`team modify ${line} prefix [{"text":"${arenaKey.toUpperCase()} ","color":"${color}","bold":true},{"text":"${f1}","color":"white"},{"text":" ${s1.kills||0}/${s1.deaths||0} ","color":"gray"},{"text":"vs ","color":"${stColor}"},{"text":"${f2}","color":"white"},{"text":" ${s2.kills||0}/${s2.deaths||0}","color":"gray"}]`);
+          await rcon.send(`team modify ${matchLine} prefix [{"text":"${arenaKey.toUpperCase()} ","color":"${color}","bold":true},{"text":"${f1}","color":"white"},{"text":" ${s1.kills||0}/${s1.deaths||0} ","color":"gray"},{"text":"vs ","color":"${stColor}"},{"text":"${f2}","color":"white"},{"text":" ${s2.kills||0}/${s2.deaths||0}","color":"gray"}]`);
         } else {
-          await rcon.send(`team modify ${line} prefix [{"text":"${arenaKey.toUpperCase()} ","color":"${color}","bold":true},{"text":"${state.toLowerCase()}","color":"gray","italic":true}]`);
+          await rcon.send(`team modify ${matchLine} prefix [{"text":"${arenaKey.toUpperCase()} ","color":"${color}","bold":true},{"text":"${state.toLowerCase()}","color":"gray","italic":true}]`);
         }
+
+        // Line 2: all bots sorted by kills (compact: Name:K format)
+        const arenaBots = BOT_DEFS.filter(d => d.arena === arenaKey)
+          .map(d => ({ name: d.name, kills: (botStats[d.name] || {}).kills || 0 }))
+          .sort((a, b) => b.kills - a.kills);
+        const statsText = arenaBots.map(b => `${b.name.substring(0, 4)}:${b.kills}`).join(' ');
+        await rcon.send(`team modify ${statsLine} prefix [{"text":" ${statsText}","color":"gray"}]`);
       }
 
-      // --- Matches line (sb08) ---
+      // --- Matches + Best (sb10-sb11) ---
       const totalMatches = Object.values(arenaMatches).reduce((sum, m) => sum + m.matchNum, 0);
-      await rcon.send(`team modify sb08 prefix [{"text":"Matches: ","color":"gray"},{"text":"${totalMatches}","color":"light_purple"}]`);
+      await rcon.send(`team modify sb10 prefix [{"text":"Matches: ","color":"gray"},{"text":"${totalMatches}","color":"light_purple"}]`);
 
-      // --- Best fighters line (sb09): top 2 across all arenas ---
       const allBotStats = BOT_DEFS.map(d => ({
         name: d.name, kills: (botStats[d.name] || {}).kills || 0, deaths: (botStats[d.name] || {}).deaths || 0,
       })).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
       const top2 = allBotStats.slice(0, 2);
       if (top2.length >= 2 && (top2[0].kills > 0 || top2[1].kills > 0)) {
-        await rcon.send(`team modify sb09 prefix [{"text":"Best: ","color":"gray"},{"text":"${top2[0].name}","color":"white"},{"text":" ${top2[0].kills}/${top2[0].deaths}","color":"yellow"},{"text":" · ","color":"dark_gray"},{"text":"${top2[1].name}","color":"white"},{"text":" ${top2[1].kills}/${top2[1].deaths}","color":"yellow"}]`);
+        await rcon.send(`team modify sb11 prefix [{"text":"Best: ","color":"gray"},{"text":"${top2[0].name}","color":"white"},{"text":" ${top2[0].kills}/${top2[0].deaths}","color":"yellow"},{"text":" · ","color":"dark_gray"},{"text":"${top2[1].name}","color":"white"},{"text":" ${top2[1].kills}/${top2[1].deaths}","color":"yellow"}]`);
       }
 
-      // --- Betting section (sb12-sb14) ---
+      // --- Leaderboard (sb14-sb15): top 3 bettors ---
+      const coinEntries = Object.entries(playerCoins).sort((a, b) => b[1] - a[1]);
+      if (coinEntries.length === 0) {
+        await rcon.send(`team modify sb14 prefix [{"text":"No bettors yet","color":"gray","italic":true}]`);
+        await rcon.send(`team modify sb15 prefix {"text":""}`);
+      } else if (coinEntries.length === 1) {
+        const [n1, c1] = coinEntries[0];
+        await rcon.send(`team modify sb14 prefix [{"text":"1. ","color":"gold","bold":true},{"text":"${n1} ","color":"white"},{"text":"${c1}","color":"yellow"}]`);
+        await rcon.send(`team modify sb15 prefix {"text":""}`);
+      } else {
+        const [n1, c1] = coinEntries[0];
+        await rcon.send(`team modify sb14 prefix [{"text":"1. ","color":"gold","bold":true},{"text":"${n1} ","color":"white"},{"text":"${c1}","color":"yellow"}]`);
+        const parts = [];
+        if (coinEntries[1]) { const [n2, c2] = coinEntries[1]; parts.push(`{"text":"2. ","color":"gray"},{"text":"${n2} ","color":"white"},{"text":"${c2}","color":"yellow"}`); }
+        if (coinEntries[2]) { const [n3, c3] = coinEntries[2]; parts.push(`{"text":" 3. ","color":"gray"},{"text":"${n3} ","color":"white"},{"text":"${c3}","color":"yellow"}`); }
+        await rcon.send(`team modify sb15 prefix [${parts.join(',')}]`);
+      }
+
+      // --- Pool info (sb16) ---
       const allBets = Object.values(activeBets).flatMap(b => Object.entries(b));
       const totalPool = allBets.reduce((s, [, b]) => s + b.amount, 0);
       const betCount = allBets.length;
-      await rcon.send(`team modify sb12 prefix [{"text":"Pool: ","color":"gray"},{"text":"${totalPool}","color":"gold"},{"text":" · Bets: ","color":"dark_gray"},{"text":"${betCount}","color":"aqua"}]`);
-
-      // Top 3 bettors by coin balance (medal colors: gold, silver, bronze)
-      const coinEntries = Object.entries(playerCoins).sort((a, b) => b[1] - a[1]);
-      if (coinEntries.length === 0) {
-        await rcon.send(`team modify sb13 prefix [{"text":"No bettors yet","color":"gray","italic":true}]`);
-        await rcon.send(`team modify sb14 prefix {"text":""}`);
-      } else if (coinEntries.length === 1) {
-        const [n1, c1] = coinEntries[0];
-        await rcon.send(`team modify sb13 prefix [{"text":"\u2b50 ","color":"gold"},{"text":"${n1}","color":"white","bold":true},{"text":" ${c1}\u00a2","color":"yellow"}]`);
-        await rcon.send(`team modify sb14 prefix {"text":""}`);
-      } else {
-        const [n1, c1] = coinEntries[0];
-        await rcon.send(`team modify sb13 prefix [{"text":"\u2b50 ","color":"gold"},{"text":"${n1}","color":"white","bold":true},{"text":" ${c1}\u00a2","color":"yellow"}]`);
-        const parts = [];
-        if (coinEntries[1]) { const [n2, c2] = coinEntries[1]; parts.push(`{"text":"2. ","color":"white"},{"text":"${n2}","color":"gray"},{"text":" ${c2}\u00a2 ","color":"white"}`); }
-        if (coinEntries[2]) { const [n3, c3] = coinEntries[2]; parts.push(`{"text":"3. ","color":"white"},{"text":"${n3}","color":"gray"},{"text":" ${c3}\u00a2","color":"white"}`); }
-        await rcon.send(`team modify sb14 prefix [${parts.join(',')}]`);
-      }
+      await rcon.send(`team modify sb16 prefix [{"text":"Pool: ","color":"gray"},{"text":"${totalPool}","color":"gold"},{"text":" · ","color":"dark_gray"},{"text":"${betCount}","color":"aqua"},{"text":" bets","color":"gray"}]`);
 
       // Update kills scoreboard (belowName display)
       for (const [bName, stats] of Object.entries(botStats)) {
