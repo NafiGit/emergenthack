@@ -1,0 +1,770 @@
+{
+  "address": "0xbD2A6049BC38d11a445Fe4A21f4a6f5CFCC6912D",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "AlreadyJoined",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "GameAlreadyCompleted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "GameAlreadyFull",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "GameNotFound",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "GameNotFull",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "GameNotOpen",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "IncorrectEntryFee",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidPlayerCount",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotGameAdmin",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TransferFailed",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "WinnerNotParticipant",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "GameCancelled",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "requiredPlayers",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "GameCreated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "prizePool",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "totalPlayers",
+          "type": "uint8"
+        }
+      ],
+      "name": "GameFull",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "currentPlayers",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "prizePool",
+          "type": "uint256"
+        }
+      ],
+      "name": "PlayerJoined",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "winner",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "payout",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "WinnerDeclared",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "ENTRY_FEE",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MAX_PLAYERS",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MIN_PLAYERS",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint8",
+          "name": "_requiredPlayers",
+          "type": "uint8"
+        }
+      ],
+      "name": "createGame",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_gameId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "_winner",
+          "type": "address"
+        }
+      ],
+      "name": "declareWinner",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "gameIdCounter",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "games",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        },
+        {
+          "internalType": "uint8",
+          "name": "requiredPlayers",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "currentPlayers",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "prizePool",
+          "type": "uint256"
+        },
+        {
+          "internalType": "enum GameManager.GameState",
+          "name": "state",
+          "type": "uint8"
+        },
+        {
+          "internalType": "address",
+          "name": "winner",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "createdAt",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getActiveGames",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_admin",
+          "type": "address"
+        }
+      ],
+      "name": "getAdminGames",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_gameId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getGameDetails",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "admin",
+              "type": "address"
+            },
+            {
+              "internalType": "uint8",
+              "name": "requiredPlayers",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint8",
+              "name": "currentPlayers",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "prizePool",
+              "type": "uint256"
+            },
+            {
+              "internalType": "enum GameManager.GameState",
+              "name": "state",
+              "type": "uint8"
+            },
+            {
+              "internalType": "address[]",
+              "name": "players",
+              "type": "address[]"
+            },
+            {
+              "internalType": "address",
+              "name": "winner",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "createdAt",
+              "type": "uint256"
+            }
+          ],
+          "internalType": "struct GameManager.GameInfo",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_player",
+          "type": "address"
+        }
+      ],
+      "name": "getPlayerGames",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getTotalGames",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "hasJoined",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_gameId",
+          "type": "uint256"
+        }
+      ],
+      "name": "joinGame",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    }
+  ],
+  "transactionHash": "0xce3f0fb78403473b613c2af2b309ef95aab20a4588dcb614798e3dc54126e030",
+  "receipt": {
+    "to": null,
+    "from": "0x5703890ed4308B3C4E558F8A4C1F08699cF12a38",
+    "contractAddress": "0xbD2A6049BC38d11a445Fe4A21f4a6f5CFCC6912D",
+    "transactionIndex": 1,
+    "gasUsed": "974611",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0x35d22191068530640ae6e4b8aa7673e14b5c57ed61ca9e5ab4b7e2843c87414c",
+    "transactionHash": "0xce3f0fb78403473b613c2af2b309ef95aab20a4588dcb614798e3dc54126e030",
+    "logs": [],
+    "blockNumber": 12992820,
+    "cumulativeGasUsed": "974611",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [],
+  "numDeployments": 1,
+  "solcInputHash": "044ae0d4149869f12d18be6f453b6bb5",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[],\"name\":\"AlreadyJoined\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"GameAlreadyCompleted\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"GameAlreadyFull\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"GameNotFound\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"GameNotFull\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"GameNotOpen\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"IncorrectEntryFee\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidPlayerCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotGameAdmin\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"TransferFailed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"WinnerNotParticipant\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"gameId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"admin\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"}],\"name\":\"GameCancelled\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"gameId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"admin\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"requiredPlayers\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"}],\"name\":\"GameCreated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"gameId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"prizePool\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"totalPlayers\",\"type\":\"uint8\"}],\"name\":\"GameFull\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"gameId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"player\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"currentPlayers\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"prizePool\",\"type\":\"uint256\"}],\"name\":\"PlayerJoined\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"gameId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"winner\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"payout\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"}],\"name\":\"WinnerDeclared\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"ENTRY_FEE\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"MAX_PLAYERS\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"MIN_PLAYERS\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"_requiredPlayers\",\"type\":\"uint8\"}],\"name\":\"createGame\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"gameId\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_gameId\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"_winner\",\"type\":\"address\"}],\"name\":\"declareWinner\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"gameIdCounter\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"games\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"admin\",\"type\":\"address\"},{\"internalType\":\"uint8\",\"name\":\"requiredPlayers\",\"type\":\"uint8\"},{\"internalType\":\"uint8\",\"name\":\"currentPlayers\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"prizePool\",\"type\":\"uint256\"},{\"internalType\":\"enum GameManager.GameState\",\"name\":\"state\",\"type\":\"uint8\"},{\"internalType\":\"address\",\"name\":\"winner\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"createdAt\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getActiveGames\",\"outputs\":[{\"internalType\":\"uint256[]\",\"name\":\"\",\"type\":\"uint256[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_admin\",\"type\":\"address\"}],\"name\":\"getAdminGames\",\"outputs\":[{\"internalType\":\"uint256[]\",\"name\":\"\",\"type\":\"uint256[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_gameId\",\"type\":\"uint256\"}],\"name\":\"getGameDetails\",\"outputs\":[{\"components\":[{\"internalType\":\"address\",\"name\":\"admin\",\"type\":\"address\"},{\"internalType\":\"uint8\",\"name\":\"requiredPlayers\",\"type\":\"uint8\"},{\"internalType\":\"uint8\",\"name\":\"currentPlayers\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"prizePool\",\"type\":\"uint256\"},{\"internalType\":\"enum GameManager.GameState\",\"name\":\"state\",\"type\":\"uint8\"},{\"internalType\":\"address[]\",\"name\":\"players\",\"type\":\"address[]\"},{\"internalType\":\"address\",\"name\":\"winner\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"createdAt\",\"type\":\"uint256\"}],\"internalType\":\"struct GameManager.GameInfo\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_player\",\"type\":\"address\"}],\"name\":\"getPlayerGames\",\"outputs\":[{\"internalType\":\"uint256[]\",\"name\":\"\",\"type\":\"uint256[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getTotalGames\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"hasJoined\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_gameId\",\"type\":\"uint256\"}],\"name\":\"joinGame\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"}],\"devdoc\":{\"details\":\"Manages blockchain-based games where Admin creates games and Users join by staking MON tokens\",\"kind\":\"dev\",\"methods\":{\"createGame(uint8)\":{\"params\":{\"_requiredPlayers\":\"Number of players required (2-10)\"},\"returns\":{\"gameId\":\"The ID of the created game\"}},\"declareWinner(uint256,address)\":{\"params\":{\"_gameId\":\"The ID of the game\",\"_winner\":\"Address of the winner (must be a participant)\"}},\"getActiveGames()\":{\"returns\":{\"_0\":\"Array of game IDs\"}},\"getAdminGames(address)\":{\"params\":{\"_admin\":\"Address of the admin\"},\"returns\":{\"_0\":\"Array of game IDs\"}},\"getGameDetails(uint256)\":{\"params\":{\"_gameId\":\"The ID of the game\"},\"returns\":{\"_0\":\"Game information\"}},\"getPlayerGames(address)\":{\"params\":{\"_player\":\"Address of the player\"},\"returns\":{\"_0\":\"Array of game IDs\"}},\"getTotalGames()\":{\"returns\":{\"_0\":\"Total game count\"}},\"joinGame(uint256)\":{\"params\":{\"_gameId\":\"The ID of the game to join\"}}},\"title\":\"GameManager\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{\"createGame(uint8)\":{\"notice\":\"Create a new game\"},\"declareWinner(uint256,address)\":{\"notice\":\"Declare winner and distribute prize pool\"},\"getActiveGames()\":{\"notice\":\"Get all active (OPEN or FULL) games\"},\"getAdminGames(address)\":{\"notice\":\"Get games created by a specific admin\"},\"getGameDetails(uint256)\":{\"notice\":\"Get detailed information about a game\"},\"getPlayerGames(address)\":{\"notice\":\"Get games that a specific player has joined\"},\"getTotalGames()\":{\"notice\":\"Get total number of games created\"},\"joinGame(uint256)\":{\"notice\":\"Join a game by depositing 0.1 MON\"}},\"notice\":\"Admin creates games with required player count, Users join with 0.1 MON, Winner gets entire prize pool\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/GameManager.sol\":\"GameManager\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/GameManager.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\r\\npragma solidity ^0.8.20;\\r\\n\\r\\n/**\\r\\n * @title GameManager\\r\\n * @dev Manages blockchain-based games where Admin creates games and Users join by staking MON tokens\\r\\n * @notice Admin creates games with required player count, Users join with 0.1 MON, Winner gets entire prize pool\\r\\n */\\r\\ncontract GameManager {\\r\\n\\t// ============ Constants ============\\r\\n\\r\\n\\tuint256 public constant ENTRY_FEE = 0.1 ether; // 0.1 MON\\r\\n\\tuint8 public constant MIN_PLAYERS = 2;\\r\\n\\tuint8 public constant MAX_PLAYERS = 10;\\r\\n\\r\\n\\t// ============ Enums ============\\r\\n\\r\\n\\tenum GameState {\\r\\n\\t\\tOPEN, // Accepting players\\r\\n\\t\\tFULL, // All players joined, ready to start\\r\\n\\t\\tSTARTED, // Game in progress (winner being determined)\\r\\n\\t\\tCOMPLETED, // Winner declared and paid\\r\\n\\t\\tCANCELLED // Game cancelled\\r\\n\\t}\\r\\n\\r\\n\\t// ============ Structs ============\\r\\n\\r\\n\\tstruct GameInfo {\\r\\n\\t\\taddress admin; // Game creator\\r\\n\\t\\tuint8 requiredPlayers; // Number of players needed\\r\\n\\t\\tuint8 currentPlayers; // Current number of players\\r\\n\\t\\tuint256 prizePool; // Total MON staked\\r\\n\\t\\tGameState state; // Current game state\\r\\n\\t\\taddress[] players; // List of participants\\r\\n\\t\\taddress winner; // Winner address (set when declared)\\r\\n\\t\\tuint256 createdAt; // Timestamp of creation\\r\\n\\t}\\r\\n\\r\\n\\t// ============ State Variables ============\\r\\n\\r\\n\\tmapping(uint256 => GameInfo) public games;\\r\\n\\tmapping(uint256 => mapping(address => bool)) public hasJoined; // gameId => player => hasJoined\\r\\n\\tuint256 public gameIdCounter;\\r\\n\\r\\n\\t// ============ Events ============\\r\\n\\r\\n\\tevent GameCreated(uint256 indexed gameId, address indexed admin, uint8 requiredPlayers, uint256 timestamp);\\r\\n\\tevent PlayerJoined(uint256 indexed gameId, address indexed player, uint8 currentPlayers, uint256 prizePool);\\r\\n\\tevent GameFull(uint256 indexed gameId, uint256 prizePool, uint8 totalPlayers);\\r\\n\\tevent WinnerDeclared(uint256 indexed gameId, address indexed winner, uint256 payout, uint256 timestamp);\\r\\n\\tevent GameCancelled(uint256 indexed gameId, address indexed admin, uint256 timestamp);\\r\\n\\r\\n\\t// ============ Errors ============\\r\\n\\r\\n\\terror InvalidPlayerCount();\\r\\n\\terror GameNotFound();\\r\\n\\terror GameNotOpen();\\r\\n\\terror GameAlreadyFull();\\r\\n\\terror IncorrectEntryFee();\\r\\n\\terror AlreadyJoined();\\r\\n\\terror NotGameAdmin();\\r\\n\\terror GameNotFull();\\r\\n\\terror WinnerNotParticipant();\\r\\n\\terror GameAlreadyCompleted();\\r\\n\\terror TransferFailed();\\r\\n\\r\\n\\t// ============ Modifiers ============\\r\\n\\r\\n\\tmodifier onlyGameAdmin(uint256 _gameId) {\\r\\n\\t\\tif (games[_gameId].admin != msg.sender) revert NotGameAdmin();\\r\\n\\t\\t_;\\r\\n\\t}\\r\\n\\r\\n\\tmodifier gameExists(uint256 _gameId) {\\r\\n\\t\\tif (_gameId >= gameIdCounter) revert GameNotFound();\\r\\n\\t\\t_;\\r\\n\\t}\\r\\n\\r\\n\\t// ============ Functions ============\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Create a new game\\r\\n\\t * @param _requiredPlayers Number of players required (2-10)\\r\\n\\t * @return gameId The ID of the created game\\r\\n\\t */\\r\\n\\tfunction createGame(uint8 _requiredPlayers) external returns (uint256 gameId) {\\r\\n\\t\\tif (_requiredPlayers < MIN_PLAYERS || _requiredPlayers > MAX_PLAYERS) {\\r\\n\\t\\t\\trevert InvalidPlayerCount();\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\tgameId = gameIdCounter++;\\r\\n\\r\\n\\t\\tGameInfo storage game = games[gameId];\\r\\n\\t\\tgame.admin = msg.sender;\\r\\n\\t\\tgame.requiredPlayers = _requiredPlayers;\\r\\n\\t\\tgame.currentPlayers = 0;\\r\\n\\t\\tgame.prizePool = 0;\\r\\n\\t\\tgame.state = GameState.OPEN;\\r\\n\\t\\tgame.createdAt = block.timestamp;\\r\\n\\r\\n\\t\\temit GameCreated(gameId, msg.sender, _requiredPlayers, block.timestamp);\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Join a game by depositing 0.1 MON\\r\\n\\t * @param _gameId The ID of the game to join\\r\\n\\t */\\r\\n\\tfunction joinGame(uint256 _gameId) external payable gameExists(_gameId) {\\r\\n\\t\\tGameInfo storage game = games[_gameId];\\r\\n\\r\\n\\t\\t// Validation checks\\r\\n\\t\\tif (game.state != GameState.OPEN) revert GameNotOpen();\\r\\n\\t\\tif (game.currentPlayers >= game.requiredPlayers) revert GameAlreadyFull();\\r\\n\\t\\tif (msg.value != ENTRY_FEE) revert IncorrectEntryFee();\\r\\n\\t\\tif (hasJoined[_gameId][msg.sender]) revert AlreadyJoined();\\r\\n\\r\\n\\t\\t// Add player to game\\r\\n\\t\\tgame.players.push(msg.sender);\\r\\n\\t\\tgame.currentPlayers++;\\r\\n\\t\\tgame.prizePool += msg.value;\\r\\n\\t\\thasJoined[_gameId][msg.sender] = true;\\r\\n\\r\\n\\t\\temit PlayerJoined(_gameId, msg.sender, game.currentPlayers, game.prizePool);\\r\\n\\r\\n\\t\\t// Check if game is full\\r\\n\\t\\tif (game.currentPlayers == game.requiredPlayers) {\\r\\n\\t\\t\\tgame.state = GameState.FULL;\\r\\n\\t\\t\\temit GameFull(_gameId, game.prizePool, game.currentPlayers);\\r\\n\\t\\t}\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Declare winner and distribute prize pool\\r\\n\\t * @param _gameId The ID of the game\\r\\n\\t * @param _winner Address of the winner (must be a participant)\\r\\n\\t */\\r\\n\\tfunction declareWinner(uint256 _gameId, address _winner) external gameExists(_gameId) onlyGameAdmin(_gameId) {\\r\\n\\t\\tGameInfo storage game = games[_gameId];\\r\\n\\r\\n\\t\\t// Validation checks\\r\\n\\t\\tif (game.state != GameState.FULL) revert GameNotFull();\\r\\n\\t\\tif (!hasJoined[_gameId][_winner]) revert WinnerNotParticipant();\\r\\n\\r\\n\\t\\t// Set winner and update state\\r\\n\\t\\tgame.winner = _winner;\\r\\n\\t\\tgame.state = GameState.COMPLETED;\\r\\n\\r\\n\\t\\t// Transfer prize pool to winner\\r\\n\\t\\tuint256 payout = game.prizePool;\\r\\n\\t\\t(bool success, ) = payable(_winner).call{ value: payout }(\\\"\\\");\\r\\n\\t\\tif (!success) revert TransferFailed();\\r\\n\\r\\n\\t\\temit WinnerDeclared(_gameId, _winner, payout, block.timestamp);\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Get detailed information about a game\\r\\n\\t * @param _gameId The ID of the game\\r\\n\\t * @return Game information\\r\\n\\t */\\r\\n\\tfunction getGameDetails(uint256 _gameId) external view gameExists(_gameId) returns (GameInfo memory) {\\r\\n\\t\\treturn games[_gameId];\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Get all active (OPEN or FULL) games\\r\\n\\t * @return Array of game IDs\\r\\n\\t */\\r\\n\\tfunction getActiveGames() external view returns (uint256[] memory) {\\r\\n\\t\\tuint256 count = 0;\\r\\n\\r\\n\\t\\t// First pass: count active games\\r\\n\\t\\tfor (uint256 i = 0; i < gameIdCounter; i++) {\\r\\n\\t\\t\\tif (games[i].state == GameState.OPEN || games[i].state == GameState.FULL) {\\r\\n\\t\\t\\t\\tcount++;\\r\\n\\t\\t\\t}\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\t// Second pass: collect active game IDs\\r\\n\\t\\tuint256[] memory activeGames = new uint256[](count);\\r\\n\\t\\tuint256 index = 0;\\r\\n\\t\\tfor (uint256 i = 0; i < gameIdCounter; i++) {\\r\\n\\t\\t\\tif (games[i].state == GameState.OPEN || games[i].state == GameState.FULL) {\\r\\n\\t\\t\\t\\tactiveGames[index] = i;\\r\\n\\t\\t\\t\\tindex++;\\r\\n\\t\\t\\t}\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\treturn activeGames;\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Get games that a specific player has joined\\r\\n\\t * @param _player Address of the player\\r\\n\\t * @return Array of game IDs\\r\\n\\t */\\r\\n\\tfunction getPlayerGames(address _player) external view returns (uint256[] memory) {\\r\\n\\t\\tuint256 count = 0;\\r\\n\\r\\n\\t\\t// First pass: count games player joined\\r\\n\\t\\tfor (uint256 i = 0; i < gameIdCounter; i++) {\\r\\n\\t\\t\\tif (hasJoined[i][_player]) {\\r\\n\\t\\t\\t\\tcount++;\\r\\n\\t\\t\\t}\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\t// Second pass: collect game IDs\\r\\n\\t\\tuint256[] memory playerGames = new uint256[](count);\\r\\n\\t\\tuint256 index = 0;\\r\\n\\t\\tfor (uint256 i = 0; i < gameIdCounter; i++) {\\r\\n\\t\\t\\tif (hasJoined[i][_player]) {\\r\\n\\t\\t\\t\\tplayerGames[index] = i;\\r\\n\\t\\t\\t\\tindex++;\\r\\n\\t\\t\\t}\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\treturn playerGames;\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Get games created by a specific admin\\r\\n\\t * @param _admin Address of the admin\\r\\n\\t * @return Array of game IDs\\r\\n\\t */\\r\\n\\tfunction getAdminGames(address _admin) external view returns (uint256[] memory) {\\r\\n\\t\\tuint256 count = 0;\\r\\n\\r\\n\\t\\t// First pass: count games created by admin\\r\\n\\t\\tfor (uint256 i = 0; i < gameIdCounter; i++) {\\r\\n\\t\\t\\tif (games[i].admin == _admin) {\\r\\n\\t\\t\\t\\tcount++;\\r\\n\\t\\t\\t}\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\t// Second pass: collect game IDs\\r\\n\\t\\tuint256[] memory adminGames = new uint256[](count);\\r\\n\\t\\tuint256 index = 0;\\r\\n\\t\\tfor (uint256 i = 0; i < gameIdCounter; i++) {\\r\\n\\t\\t\\tif (games[i].admin == _admin) {\\r\\n\\t\\t\\t\\tadminGames[index] = i;\\r\\n\\t\\t\\t\\tindex++;\\r\\n\\t\\t\\t}\\r\\n\\t\\t}\\r\\n\\r\\n\\t\\treturn adminGames;\\r\\n\\t}\\r\\n\\r\\n\\t/**\\r\\n\\t * @notice Get total number of games created\\r\\n\\t * @return Total game count\\r\\n\\t */\\r\\n\\tfunction getTotalGames() external view returns (uint256) {\\r\\n\\t\\treturn gameIdCounter;\\r\\n\\t}\\r\\n}\\r\\n\",\"keccak256\":\"0x6e5d0df979e3b213518dd84b6858b3592ad57dee31e57dd7d2db995e21196a53\",\"license\":\"MIT\"}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b50611080806100206000396000f3fe6080604052600436106100dd5760003560e01c8063681947191161007f578063e580f6ab11610059578063e580f6ab146102ba578063efaa55a0146102da578063f6d361cc146102ed578063fb46b99e1461030957600080fd5b8063681947191461023857806385f07bbe14610283578063e374b0971461029857600080fd5b80631b76929c116100bb5780631b76929c146101c35780631bb412d6146101d85780634411b3eb146101fc5780635bd4349b1461022357600080fd5b8063117a5b90146100e2578063129daf84146101695780631b31abda14610196575b600080fd5b3480156100ee57600080fd5b5061014d6100fd366004610d64565b600060208190529081526040902080546001820154600283015460048401546005909401546001600160a01b038085169560ff600160a01b8704811696600160a81b900481169594169291169087565b6040516101609796959493929190610db5565b60405180910390f35b34801561017557600080fd5b50610189610184366004610e1e565b610329565b6040516101609190610e40565b3480156101a257600080fd5b506101b66101b1366004610d64565b61044d565b6040516101609190610ec8565b3480156101cf57600080fd5b506101896105bd565b3480156101e457600080fd5b506101ee60025481565b604051908152602001610160565b34801561020857600080fd5b50610211600a81565b60405160ff9091168152602001610160565b34801561022f57600080fd5b506002546101ee565b34801561024457600080fd5b50610273610253366004610f68565b600160209081526000928352604080842090915290825290205460ff1681565b6040519015158152602001610160565b34801561028f57600080fd5b50610211600281565b3480156102a457600080fd5b506102b86102b3366004610f68565b610742565b005b3480156102c657600080fd5b506101ee6102d5366004610f94565b610914565b6102b86102e8366004610d64565b610a01565b3480156102f957600080fd5b506101ee67016345785d8a000081565b34801561031557600080fd5b50610189610324366004610e1e565b610c5e565b60606000805b6002548110156103845760008181526001602090815260408083206001600160a01b038816845290915290205460ff1615610372578161036e81610fcd565b9250505b8061037c81610fcd565b91505061032f565b5060008167ffffffffffffffff8111156103a0576103a0610fe6565b6040519080825280602002602001820160405280156103c9578160200160208202803683370190505b5090506000805b6002548110156104435760008181526001602090815260408083206001600160a01b038a16845290915290205460ff1615610431578083838151811061041857610418610ffc565b60209081029190910101528161042d81610fcd565b9250505b8061043b81610fcd565b9150506103d0565b5090949350505050565b604080516101008101825260008082526020820181905291810182905260608082018390526080820183905260a082015260c0810182905260e08101919091528160025481106104b0576040516309b3c62760e21b815260040160405180910390fd5b6000838152602081815260409182902082516101008101845281546001600160a01b038116825260ff600160a01b8204811694830194909452600160a81b90048316938101939093526001810154606084015260028101549091608084019116600481111561052157610521610d7d565b600481111561053257610532610d7d565b81526020016003820180548060200260200160405190810160405280929190818152602001828054801561058f57602002820191906000526020600020905b81546001600160a01b03168152600190910190602001808311610571575b505050918352505060048201546001600160a01b031660208201526005909101546040909101529392505050565b60606000805b6002548110156106495760008181526020819052604081206002015460ff1660048111156105f3576105f3610d7d565b14806106245750600160008281526020819052604090206002015460ff16600481111561062257610622610d7d565b145b15610637578161063381610fcd565b9250505b8061064181610fcd565b9150506105c3565b5060008167ffffffffffffffff81111561066557610665610fe6565b60405190808252806020026020018201604052801561068e578160200160208202803683370190505b5090506000805b6002548110156107395760008181526020819052604081206002015460ff1660048111156106c5576106c5610d7d565b14806106f65750600160008281526020819052604090206002015460ff1660048111156106f4576106f4610d7d565b145b15610727578083838151811061070e5761070e610ffc565b60209081029190910101528161072381610fcd565b9250505b8061073181610fcd565b915050610695565b50909392505050565b816002548110610765576040516309b3c62760e21b815260040160405180910390fd5b60008381526020819052604090205483906001600160a01b0316331461079e5760405163d099646b60e01b815260040160405180910390fd5b60008481526020819052604090206001600282015460ff1660048111156107c7576107c7610d7d565b146107e5576040516316d5adf160e01b815260040160405180910390fd5b60008581526001602090815260408083206001600160a01b038816845290915290205460ff166108285760405163b64c531560e01b815260040160405180910390fd5b6004810180546001600160a01b0386166001600160a01b0319909116811790915560028201805460ff191660031790556001820154604051909160009183908381818185875af1925050503d806000811461089f576040519150601f19603f3d011682016040523d82523d6000602084013e6108a4565b606091505b50509050806108c6576040516312171d8360e31b815260040160405180910390fd5b604080518381524260208201526001600160a01b0388169189917f584c7ab771e822233a8c12dd5bfce6376db61c64776fc8abd343049cbf154c82910160405180910390a350505050505050565b6000600260ff8316108061092b5750600a60ff8316115b15610949576040516319413ccd60e11b815260040160405180910390fd5b6002805490600061095983610fcd565b90915550600081815260208190526040812080546001600160a81b0319163360ff60a01b191617600160a01b60ff8716021760ff60a81b191681556001808201839055600282018054949550919360ff19169083021790555042600582018190556040805160ff861681526020810192909252339184917fce7afad46ab3446a50492edf65c62119da1a4def9df32e797c96b27a9470f411910160405180910390a350919050565b806002548110610a24576040516309b3c62760e21b815260040160405180910390fd5b600082815260208190526040812090600282015460ff166004811115610a4c57610a4c610d7d565b14610a6a57604051635c07b6d760e11b815260040160405180910390fd5b805460ff600160a01b82048116600160a81b9092041610610a9e576040516367d4c68360e11b815260040160405180910390fd5b67016345785d8a00003414610ac657604051630440523d60e41b815260040160405180910390fd5b600083815260016020908152604080832033845290915290205460ff1615610b0057604051621d934160e11b815260040160405180910390fd5b600381018054600181018255600091825260209091200180546001600160a01b03191633179055805460ff600160a81b90910416816015610b4083611012565b91906101000a81548160ff021916908360ff1602179055505034816001016000828254610b6d9190611031565b909155505060008381526001602081815260408084203380865290835293819020805460ff1916841790558454928501548151600160a81b90940460ff1684529183019190915285917f128a80af85664814dd80bbc3309ffd638367a8025f273173959f5f527a308e31910160405180910390a3805460ff600160a01b82048116600160a81b9092041603610c5957600281018054600160ff199091168117909155810154815460408051928352600160a81b90910460ff166020830152805185927ff9011202d255d22845b9f2117d959c47b0f4788f8f80b83d883621661ffcec6292908290030190a25b505050565b60606000805b600254811015610caf576000818152602081905260409020546001600160a01b03808616911603610c9d5781610c9981610fcd565b9250505b80610ca781610fcd565b915050610c64565b5060008167ffffffffffffffff811115610ccb57610ccb610fe6565b604051908082528060200260200182016040528015610cf4578160200160208202803683370190505b5090506000805b600254811015610443576000818152602081905260409020546001600160a01b03808816911603610d525780838381518110610d3957610d39610ffc565b602090810291909101015281610d4e81610fcd565b9250505b80610d5c81610fcd565b915050610cfb565b600060208284031215610d7657600080fd5b5035919050565b634e487b7160e01b600052602160045260246000fd5b60058110610db157634e487b7160e01b600052602160045260246000fd5b9052565b6001600160a01b03888116825260ff8881166020840152871660408301526060820186905260e0820190610dec6080840187610d93565b9390931660a082015260c0015295945050505050565b80356001600160a01b0381168114610e1957600080fd5b919050565b600060208284031215610e3057600080fd5b610e3982610e02565b9392505050565b6020808252825182820181905260009190848201906040850190845b81811015610e7857835183529284019291840191600101610e5c565b50909695505050505050565b600081518084526020808501945080840160005b83811015610ebd5781516001600160a01b031687529582019590820190600101610e98565b509495945050505050565b6020815260018060a01b03825116602082015260ff602083015116604082015260006040830151610efe606084018260ff169052565b50606083015160808301526080830151610f1b60a0840182610d93565b5060a08301516101008060c0850152610f38610120850183610e84565b915060c0850151610f5460e08601826001600160a01b03169052565b5060e0949094015192909301919091525090565b60008060408385031215610f7b57600080fd5b82359150610f8b60208401610e02565b90509250929050565b600060208284031215610fa657600080fd5b813560ff81168114610e3957600080fd5b634e487b7160e01b600052601160045260246000fd5b600060018201610fdf57610fdf610fb7565b5060010190565b634e487b7160e01b600052604160045260246000fd5b634e487b7160e01b600052603260045260246000fd5b600060ff821660ff810361102857611028610fb7565b60010192915050565b8082018082111561104457611044610fb7565b9291505056fea2646970667358221220743d28e5ff488ca507f602cc14eae488f4b57cca9f694e368bde152a1f7e240a64736f6c63430008140033",
+  "deployedBytecode": "0x6080604052600436106100dd5760003560e01c8063681947191161007f578063e580f6ab11610059578063e580f6ab146102ba578063efaa55a0146102da578063f6d361cc146102ed578063fb46b99e1461030957600080fd5b8063681947191461023857806385f07bbe14610283578063e374b0971461029857600080fd5b80631b76929c116100bb5780631b76929c146101c35780631bb412d6146101d85780634411b3eb146101fc5780635bd4349b1461022357600080fd5b8063117a5b90146100e2578063129daf84146101695780631b31abda14610196575b600080fd5b3480156100ee57600080fd5b5061014d6100fd366004610d64565b600060208190529081526040902080546001820154600283015460048401546005909401546001600160a01b038085169560ff600160a01b8704811696600160a81b900481169594169291169087565b6040516101609796959493929190610db5565b60405180910390f35b34801561017557600080fd5b50610189610184366004610e1e565b610329565b6040516101609190610e40565b3480156101a257600080fd5b506101b66101b1366004610d64565b61044d565b6040516101609190610ec8565b3480156101cf57600080fd5b506101896105bd565b3480156101e457600080fd5b506101ee60025481565b604051908152602001610160565b34801561020857600080fd5b50610211600a81565b60405160ff9091168152602001610160565b34801561022f57600080fd5b506002546101ee565b34801561024457600080fd5b50610273610253366004610f68565b600160209081526000928352604080842090915290825290205460ff1681565b6040519015158152602001610160565b34801561028f57600080fd5b50610211600281565b3480156102a457600080fd5b506102b86102b3366004610f68565b610742565b005b3480156102c657600080fd5b506101ee6102d5366004610f94565b610914565b6102b86102e8366004610d64565b610a01565b3480156102f957600080fd5b506101ee67016345785d8a000081565b34801561031557600080fd5b50610189610324366004610e1e565b610c5e565b60606000805b6002548110156103845760008181526001602090815260408083206001600160a01b038816845290915290205460ff1615610372578161036e81610fcd565b9250505b8061037c81610fcd565b91505061032f565b5060008167ffffffffffffffff8111156103a0576103a0610fe6565b6040519080825280602002602001820160405280156103c9578160200160208202803683370190505b5090506000805b6002548110156104435760008181526001602090815260408083206001600160a01b038a16845290915290205460ff1615610431578083838151811061041857610418610ffc565b60209081029190910101528161042d81610fcd565b9250505b8061043b81610fcd565b9150506103d0565b5090949350505050565b604080516101008101825260008082526020820181905291810182905260608082018390526080820183905260a082015260c0810182905260e08101919091528160025481106104b0576040516309b3c62760e21b815260040160405180910390fd5b6000838152602081815260409182902082516101008101845281546001600160a01b038116825260ff600160a01b8204811694830194909452600160a81b90048316938101939093526001810154606084015260028101549091608084019116600481111561052157610521610d7d565b600481111561053257610532610d7d565b81526020016003820180548060200260200160405190810160405280929190818152602001828054801561058f57602002820191906000526020600020905b81546001600160a01b03168152600190910190602001808311610571575b505050918352505060048201546001600160a01b031660208201526005909101546040909101529392505050565b60606000805b6002548110156106495760008181526020819052604081206002015460ff1660048111156105f3576105f3610d7d565b14806106245750600160008281526020819052604090206002015460ff16600481111561062257610622610d7d565b145b15610637578161063381610fcd565b9250505b8061064181610fcd565b9150506105c3565b5060008167ffffffffffffffff81111561066557610665610fe6565b60405190808252806020026020018201604052801561068e578160200160208202803683370190505b5090506000805b6002548110156107395760008181526020819052604081206002015460ff1660048111156106c5576106c5610d7d565b14806106f65750600160008281526020819052604090206002015460ff1660048111156106f4576106f4610d7d565b145b15610727578083838151811061070e5761070e610ffc565b60209081029190910101528161072381610fcd565b9250505b8061073181610fcd565b915050610695565b50909392505050565b816002548110610765576040516309b3c62760e21b815260040160405180910390fd5b60008381526020819052604090205483906001600160a01b0316331461079e5760405163d099646b60e01b815260040160405180910390fd5b60008481526020819052604090206001600282015460ff1660048111156107c7576107c7610d7d565b146107e5576040516316d5adf160e01b815260040160405180910390fd5b60008581526001602090815260408083206001600160a01b038816845290915290205460ff166108285760405163b64c531560e01b815260040160405180910390fd5b6004810180546001600160a01b0386166001600160a01b0319909116811790915560028201805460ff191660031790556001820154604051909160009183908381818185875af1925050503d806000811461089f576040519150601f19603f3d011682016040523d82523d6000602084013e6108a4565b606091505b50509050806108c6576040516312171d8360e31b815260040160405180910390fd5b604080518381524260208201526001600160a01b0388169189917f584c7ab771e822233a8c12dd5bfce6376db61c64776fc8abd343049cbf154c82910160405180910390a350505050505050565b6000600260ff8316108061092b5750600a60ff8316115b15610949576040516319413ccd60e11b815260040160405180910390fd5b6002805490600061095983610fcd565b90915550600081815260208190526040812080546001600160a81b0319163360ff60a01b191617600160a01b60ff8716021760ff60a81b191681556001808201839055600282018054949550919360ff19169083021790555042600582018190556040805160ff861681526020810192909252339184917fce7afad46ab3446a50492edf65c62119da1a4def9df32e797c96b27a9470f411910160405180910390a350919050565b806002548110610a24576040516309b3c62760e21b815260040160405180910390fd5b600082815260208190526040812090600282015460ff166004811115610a4c57610a4c610d7d565b14610a6a57604051635c07b6d760e11b815260040160405180910390fd5b805460ff600160a01b82048116600160a81b9092041610610a9e576040516367d4c68360e11b815260040160405180910390fd5b67016345785d8a00003414610ac657604051630440523d60e41b815260040160405180910390fd5b600083815260016020908152604080832033845290915290205460ff1615610b0057604051621d934160e11b815260040160405180910390fd5b600381018054600181018255600091825260209091200180546001600160a01b03191633179055805460ff600160a81b90910416816015610b4083611012565b91906101000a81548160ff021916908360ff1602179055505034816001016000828254610b6d9190611031565b909155505060008381526001602081815260408084203380865290835293819020805460ff1916841790558454928501548151600160a81b90940460ff1684529183019190915285917f128a80af85664814dd80bbc3309ffd638367a8025f273173959f5f527a308e31910160405180910390a3805460ff600160a01b82048116600160a81b9092041603610c5957600281018054600160ff199091168117909155810154815460408051928352600160a81b90910460ff166020830152805185927ff9011202d255d22845b9f2117d959c47b0f4788f8f80b83d883621661ffcec6292908290030190a25b505050565b60606000805b600254811015610caf576000818152602081905260409020546001600160a01b03808616911603610c9d5781610c9981610fcd565b9250505b80610ca781610fcd565b915050610c64565b5060008167ffffffffffffffff811115610ccb57610ccb610fe6565b604051908082528060200260200182016040528015610cf4578160200160208202803683370190505b5090506000805b600254811015610443576000818152602081905260409020546001600160a01b03808816911603610d525780838381518110610d3957610d39610ffc565b602090810291909101015281610d4e81610fcd565b9250505b80610d5c81610fcd565b915050610cfb565b600060208284031215610d7657600080fd5b5035919050565b634e487b7160e01b600052602160045260246000fd5b60058110610db157634e487b7160e01b600052602160045260246000fd5b9052565b6001600160a01b03888116825260ff8881166020840152871660408301526060820186905260e0820190610dec6080840187610d93565b9390931660a082015260c0015295945050505050565b80356001600160a01b0381168114610e1957600080fd5b919050565b600060208284031215610e3057600080fd5b610e3982610e02565b9392505050565b6020808252825182820181905260009190848201906040850190845b81811015610e7857835183529284019291840191600101610e5c565b50909695505050505050565b600081518084526020808501945080840160005b83811015610ebd5781516001600160a01b031687529582019590820190600101610e98565b509495945050505050565b6020815260018060a01b03825116602082015260ff602083015116604082015260006040830151610efe606084018260ff169052565b50606083015160808301526080830151610f1b60a0840182610d93565b5060a08301516101008060c0850152610f38610120850183610e84565b915060c0850151610f5460e08601826001600160a01b03169052565b5060e0949094015192909301919091525090565b60008060408385031215610f7b57600080fd5b82359150610f8b60208401610e02565b90509250929050565b600060208284031215610fa657600080fd5b813560ff81168114610e3957600080fd5b634e487b7160e01b600052601160045260246000fd5b600060018201610fdf57610fdf610fb7565b5060010190565b634e487b7160e01b600052604160045260246000fd5b634e487b7160e01b600052603260045260246000fd5b600060ff821660ff810361102857611028610fb7565b60010192915050565b8082018082111561104457611044610fb7565b9291505056fea2646970667358221220743d28e5ff488ca507f602cc14eae488f4b57cca9f694e368bde152a1f7e240a64736f6c63430008140033",
+  "devdoc": {
+    "details": "Manages blockchain-based games where Admin creates games and Users join by staking MON tokens",
+    "kind": "dev",
+    "methods": {
+      "createGame(uint8)": {
+        "params": {
+          "_requiredPlayers": "Number of players required (2-10)"
+        },
+        "returns": {
+          "gameId": "The ID of the created game"
+        }
+      },
+      "declareWinner(uint256,address)": {
+        "params": {
+          "_gameId": "The ID of the game",
+          "_winner": "Address of the winner (must be a participant)"
+        }
+      },
+      "getActiveGames()": {
+        "returns": {
+          "_0": "Array of game IDs"
+        }
+      },
+      "getAdminGames(address)": {
+        "params": {
+          "_admin": "Address of the admin"
+        },
+        "returns": {
+          "_0": "Array of game IDs"
+        }
+      },
+      "getGameDetails(uint256)": {
+        "params": {
+          "_gameId": "The ID of the game"
+        },
+        "returns": {
+          "_0": "Game information"
+        }
+      },
+      "getPlayerGames(address)": {
+        "params": {
+          "_player": "Address of the player"
+        },
+        "returns": {
+          "_0": "Array of game IDs"
+        }
+      },
+      "getTotalGames()": {
+        "returns": {
+          "_0": "Total game count"
+        }
+      },
+      "joinGame(uint256)": {
+        "params": {
+          "_gameId": "The ID of the game to join"
+        }
+      }
+    },
+    "title": "GameManager",
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {
+      "createGame(uint8)": {
+        "notice": "Create a new game"
+      },
+      "declareWinner(uint256,address)": {
+        "notice": "Declare winner and distribute prize pool"
+      },
+      "getActiveGames()": {
+        "notice": "Get all active (OPEN or FULL) games"
+      },
+      "getAdminGames(address)": {
+        "notice": "Get games created by a specific admin"
+      },
+      "getGameDetails(uint256)": {
+        "notice": "Get detailed information about a game"
+      },
+      "getPlayerGames(address)": {
+        "notice": "Get games that a specific player has joined"
+      },
+      "getTotalGames()": {
+        "notice": "Get total number of games created"
+      },
+      "joinGame(uint256)": {
+        "notice": "Join a game by depositing 0.1 MON"
+      }
+    },
+    "notice": "Admin creates games with required player count, Users join with 0.1 MON, Winner gets entire prize pool",
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [
+      {
+        "astId": 41,
+        "contract": "contracts/GameManager.sol:GameManager",
+        "label": "games",
+        "offset": 0,
+        "slot": "0",
+        "type": "t_mapping(t_uint256,t_struct(GameInfo)36_storage)"
+      },
+      {
+        "astId": 47,
+        "contract": "contracts/GameManager.sol:GameManager",
+        "label": "hasJoined",
+        "offset": 0,
+        "slot": "1",
+        "type": "t_mapping(t_uint256,t_mapping(t_address,t_bool))"
+      },
+      {
+        "astId": 49,
+        "contract": "contracts/GameManager.sol:GameManager",
+        "label": "gameIdCounter",
+        "offset": 0,
+        "slot": "2",
+        "type": "t_uint256"
+      }
+    ],
+    "types": {
+      "t_address": {
+        "encoding": "inplace",
+        "label": "address",
+        "numberOfBytes": "20"
+      },
+      "t_array(t_address)dyn_storage": {
+        "base": "t_address",
+        "encoding": "dynamic_array",
+        "label": "address[]",
+        "numberOfBytes": "32"
+      },
+      "t_bool": {
+        "encoding": "inplace",
+        "label": "bool",
+        "numberOfBytes": "1"
+      },
+      "t_enum(GameState)17": {
+        "encoding": "inplace",
+        "label": "enum GameManager.GameState",
+        "numberOfBytes": "1"
+      },
+      "t_mapping(t_address,t_bool)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => bool)",
+        "numberOfBytes": "32",
+        "value": "t_bool"
+      },
+      "t_mapping(t_uint256,t_mapping(t_address,t_bool))": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "label": "mapping(uint256 => mapping(address => bool))",
+        "numberOfBytes": "32",
+        "value": "t_mapping(t_address,t_bool)"
+      },
+      "t_mapping(t_uint256,t_struct(GameInfo)36_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "label": "mapping(uint256 => struct GameManager.GameInfo)",
+        "numberOfBytes": "32",
+        "value": "t_struct(GameInfo)36_storage"
+      },
+      "t_struct(GameInfo)36_storage": {
+        "encoding": "inplace",
+        "label": "struct GameManager.GameInfo",
+        "members": [
+          {
+            "astId": 19,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "admin",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_address"
+          },
+          {
+            "astId": 21,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "requiredPlayers",
+            "offset": 20,
+            "slot": "0",
+            "type": "t_uint8"
+          },
+          {
+            "astId": 23,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "currentPlayers",
+            "offset": 21,
+            "slot": "0",
+            "type": "t_uint8"
+          },
+          {
+            "astId": 25,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "prizePool",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 28,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "state",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_enum(GameState)17"
+          },
+          {
+            "astId": 31,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "players",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_array(t_address)dyn_storage"
+          },
+          {
+            "astId": 33,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "winner",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_address"
+          },
+          {
+            "astId": 35,
+            "contract": "contracts/GameManager.sol:GameManager",
+            "label": "createdAt",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_uint256"
+          }
+        ],
+        "numberOfBytes": "192"
+      },
+      "t_uint256": {
+        "encoding": "inplace",
+        "label": "uint256",
+        "numberOfBytes": "32"
+      },
+      "t_uint8": {
+        "encoding": "inplace",
+        "label": "uint8",
+        "numberOfBytes": "1"
+      }
+    }
+  }
+}
