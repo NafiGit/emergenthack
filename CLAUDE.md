@@ -73,7 +73,7 @@ If the LLM fails, deterministic fallback structure templates are used. Retry log
 - **`src/agentMemory.js`** — Shared blackboard memory with TTL (default 5 min). Categories: resources, POIs, objectives
 - **`src/eventBus.js`** — Pub/sub event system for bot actions. Caches last 50 events, logs to `agents/{name}/{name}_actions.log` (rolling 100 lines)
 - **`src/messageSystem.js`** — Inter-agent direct messaging with inboxes (max 10 messages, rolling)
-- **`src/arena-bot.js`** — AI arena competitor bot. State machine (IDLE → ENTERING → FIGHTING → IDLE). Scans for players in arenas every 1s, teleports to join, fights with arena-specific combat AI (PvP melee/heal, Sumo knockback/center-control, Spleef dig-under-opponent, Archery aim-shoot-cover). Tracks wins via scoreboard commands.
+- **`src/arena-bot.js`** — 8 arena bots (2 per arena) with per-arena async game loops and match lifecycle. See **Arena Bot Architecture** below for details.
 - **`server/start-server.js`** — Node.js launcher for the Java Minecraft server. Auto-accepts EULA, auto-ops agents on join (Saumya, Sumedha, Ahaan, Architect, ArenaBuilder, ArenaBot)
 - **`agents/minecraft_mcp_server.py`** — Python MCP server for RCON control (requires `mcrcon`, `mcp` — see `agents/requirements.txt`)
 
@@ -95,6 +95,40 @@ The arena village uses command blocks for interactive gameplay:
 - **Area detection**: `@a[x=..,y=..,z=..,dx=..,dy=..,dz=..]` box selectors detect players inside arenas.
 - **Adventure mode**: `CanDestroy` NBT tag on spleef shovels allows breaking snow_block in adventure mode.
 - **Scoreboard**: `kills` (playerKillCount, auto-tracks PvP kills, shown on sidebar + below nametags) and `wins` (dummy, managed by arena bot on death/match end).
+- **Spectator boxes**: Glass viewing rooms outside each arena's detection area with return-to-hub buttons. Hub has spectate buttons next to the join buttons. Built by `buildSpectatorBox()` in `build-arena-village.js`.
+- **Staircases**: Sumo staircase ascends east toward bridge (x=33→39, y=4→10). Spleef staircase ascends west toward entrance bridge (x=-25→-36, y=4→15). Both have solid fill below for structure.
+
+### Arena Bot Architecture
+
+`src/arena-bot.js` runs 8 bots in a single process (2 per arena), each with strategy-driven combat AI.
+
+**Bot pairs:**
+| Arena | Bot 1 | Bot 2 | Spawn Y | Win Condition |
+|-------|-------|-------|---------|---------------|
+| PvP | Pvp1 (0,4,46) | Pvp2 (0,4,64) | 4 | Death or timeout HP compare |
+| Sumo | Sumo1 (50,11,5) | Sumo2 (60,11,-5) | 11 | Fall below y=5 (`SUMO_FALL_Y`) or death |
+| Spleef | Spleef1 (-50,16,5) | Spleef2 (-60,16,-5) | 16 | Death (lava at y=3) |
+| Archery | Archer1 (5,4,-52) | Archer2 (-5,4,-58) | 4 | Death or timeout HP compare |
+
+**Per-arena game loop** (`arenaGameLoop(arena)`) — each arena runs independently:
+```
+WAITING → COUNTDOWN (3-2-1-FIGHT, 4s) → ACTIVE (combat, up to 2min)
+    → ENDING (announce winner, 3s) → RESETTING (regen/heal/regive, 3s) → loop
+```
+
+**Match end signaling:** Promise-based. `matchEndResolvers[arena]` holds a resolve function. Death handler, sumo fall detection, or timeout calls `signalMatchEnd()` which resolves the Promise in the game loop. Second signal for same match is a no-op (resolver already deleted).
+
+**Combat ticks:** 250ms interval per bot, gated on `arenaMatches[arena].state === 'ACTIVE'`. Each arena has its own tick function: `pvpTick`, `sumoTick`, `spleefTick`, `archeryTick`.
+
+**Strategy files** (`strategies/<BotName>.json`): Optional per-bot JSON with tunable combat parameters (attack_range, strafe_chance, heal_threshold, etc.). Loaded at bot spawn, fallback defaults if missing.
+
+**Arena configs** (`arenas/<arena>.json`): Coordinates, bounds, spawn points, and design notes for each arena.
+
+**Spleef snow regen:** During RESETTING, three `fill` commands regenerate snow at y=7, y=11, y=15 via RCON *before* teleporting bots back. 500ms sleep after regen.
+
+**Logging:** Per-bot file logging to `/tmp/arena-logs/<BotName>.log`. Heatmap JSONL logging (position every 1s) to `/tmp/arena-logs/<BotName>_heatmap.jsonl`.
+
+**Auto-OP:** Bots are OP'd via RCON on spawn. New bot names must be added to the auto-OP list in `server/start-server.js`.
 
 ### LLM Provider Chain
 
@@ -130,3 +164,5 @@ Minecraft 1.16.2 on superflat world. Key settings in `server/java-server/server.
 - `view-distance=10`, `level-type=flat`, `generate-structures=false`
 
 World spawn is set to `0, 4, -8` (MineForge hub, solid ground). Adventure mode prevents block breaking; buttons + command blocks handle arena teleportation. Each arena has a 2-minute timer (repeating command blocks underground at y=1) and a "Return to Hub" button. AI agents build around (500, 500). Base-themed blocks: `blue_concrete`, `white_concrete`, `light_blue_concrete`, `quartz_block`, `sea_lantern`, `prismarine`, `lapis_block`, `packed_ice`. Ground level on superflat: y=3.
+
+**Arena centers** (from `build-arena-village.js`): PvP at (0, 55) south, Sumo at (55, 0) east, Spleef at (-55, 0) west, Archery at (0, -55) north. G=3 (ground), Y=4 (build floor). Sumo platform at y=10 (platY=G+7).

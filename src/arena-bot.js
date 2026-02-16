@@ -129,6 +129,9 @@ async function arenaGameLoop(arena) {
     match.matchNum++;
     console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — COUNTDOWN`);
 
+    // Reset command block timer to prevent conflict with game loop lifecycle
+    try { await rcon.send(`scoreboard players set ${arena}_t timer 0`); } catch {}
+
     // Freeze bots at spawn
     for (const def of bots) {
       if (botStats[def.name]) botStats[def.name].active = false;
@@ -188,7 +191,16 @@ async function arenaGameLoop(arena) {
       const t30 = announce(30000, '0:30 remaining', 'gold');
       const t10 = announce(10000, '10 seconds!', 'red');
 
-      cleanupTimers = () => { clearTimeout(timeout); clearTimeout(t60); clearTimeout(t30); clearTimeout(t10); };
+      // Disconnect check every 3s — end match if a bot drops
+      const dcCheck = setInterval(() => {
+        const b0 = botInstances[bots[0].name];
+        const b1 = botInstances[bots[1].name];
+        if (!b0 && b1) signalMatchEnd(arena, `${bots[0].name} disconnected`, bots[1].name);
+        else if (!b1 && b0) signalMatchEnd(arena, `${bots[1].name} disconnected`, bots[0].name);
+        else if (!b0 && !b1) signalMatchEnd(arena, 'Both disconnected', null);
+      }, 3000);
+
+      cleanupTimers = () => { clearTimeout(timeout); clearTimeout(t60); clearTimeout(t30); clearTimeout(t10); clearInterval(dcCheck); };
       matchEndResolvers[arena] = { resolve };
     });
 
@@ -227,6 +239,9 @@ async function arenaGameLoop(arena) {
     console.log(`[${ts()}] [${arena.toUpperCase()}] Resetting...`);
 
     try {
+      // Reset command block timer again during reset phase
+      try { await rcon.send(`scoreboard players set ${arena}_t timer 0`); } catch {}
+
       // Spleef snow regen (BEFORE teleport)
       if (arena === 'spleef') {
         await rcon.send('fill -66 7 -11 -44 7 11 snow_block');
@@ -329,7 +344,7 @@ async function giveItems(name, arena) {
     ],
     archery: [
       `give ${name} minecraft:bow`,
-      `give ${name} minecraft:arrow 64`,
+      `give ${name} minecraft:arrow 128`,
       `give ${name} minecraft:leather_chestplate`,
     ],
   };
@@ -441,7 +456,7 @@ async function pvpTick(bot, name, target) {
 
 async function sumoTick(bot, name, target) {
   const strat = botStrategies[name];
-  const retreatThresh = strat?.combat?.center_retreat_threshold ?? 8;
+  const retreatThresh = strat?.combat?.center_retreat_threshold ?? 3;
   const range = strat?.combat?.attack_range ?? 3.5;
   const comboDelay = strat?.combat?.knockback_combo_delay_ms ?? 200;
   const retreatSprint = strat?.combat?.retreat_sprint_ms ?? 400;
@@ -491,6 +506,15 @@ async function spleefTick(bot, name, target) {
   const digRX = strat?.combat?.dig_radius_x ?? 2;
   const digRZ = strat?.combat?.dig_radius_z ?? 2;
   const digDepth = strat?.combat?.dig_depth ?? 3;
+
+  // Fall detection — first bot below bottom snow layer loses
+  const pos = bot.entity.position;
+  if (pos.y < 6) {
+    log(name, `FELL THROUGH SNOW! (y=${pos.y.toFixed(1)})`);
+    const def = BOT_DEFS.find(d => d.name === name);
+    endMatch('spleef', `${name} fell through`, def.opponent).catch(() => {});
+    return;
+  }
 
   // Ensure shovel equipped
   const shovel = bot.inventory.items().find(i => i.name === 'iron_shovel');
@@ -578,8 +602,11 @@ async function archeryTick(bot, name, target) {
 
   if (!lastBowShot[name]) lastBowShot[name] = 0;
 
-  // Shoot with cooldown
-  if (now - lastBowShot[name] > cooldown) {
+  // Check arrow count — skip shooting if low
+  const arrowCount = bot.inventory.items().filter(i => i.name === 'arrow').reduce((s, i) => s + i.count, 0);
+
+  // Shoot with cooldown (only if arrows available)
+  if (arrowCount >= 1 && now - lastBowShot[name] > cooldown) {
     bot.activateItem();
     const chargeTime = Math.min(maxCharge, chargeBase + dist * chargePerDist);
     setTimeout(async () => {
