@@ -282,18 +282,54 @@ function buildItemSystem() {
     `execute as @a[tag=!has_wands,tag=!bot] run tag @s add has_wands`));
 
   // --- Chain B: Unified right-click detection (y=1, x=-20, z=-25, east) ---
-  // Handles spectate TP (CMD 1-5) + betting (CMD 11-18) in ONE chain (no dual-reset bug)
+  // Handles spectate TP (CMD 1-5, with spleef floor cycling) + betting (CMD 11-18)
   bx = -20; bz = -25; idx = 0;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 26} 1 ${bz} air`);
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 36} 1 ${bz} air`);
 
-  // Spectate navigation: TP + mark for item refresh
+  const stickSel = (cmd) => `scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${cmd}}}}`;
+
+  // Spectate navigation: TP + tag for item refresh
   for (const item of SPECTATE_ITEMS) {
     const blockFn = idx === 0 ? repeatBlock : chainBlock;
-    cmds.push(blockFn(bx + idx, 1, bz, 'east',
-      `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] at @s run tp @s ${item.tp}`));
-    idx++;
+
+    if (item.cmd === 3) {
+      // Spleef floor cycling: bottom(y=8)→middle(y=13)→gallery(y=16)→bottom
+      const ss = stickSel(3);
+      const spleefBox = 'x=-70,z=-15,dx=30,dz=30';
+      cmds.push(blockFn(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},${spleefBox},y=7,dy=5] at @s run tp @s -41 13 0`));
+      idx++;
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},${spleefBox},y=7,dy=5] run tag @s add floor_tp`));
+      idx++;
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},${spleefBox},y=12,dy=4] at @s run tp @s -41 17 0`));
+      idx++;
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},${spleefBox},y=12,dy=4] run tag @s add floor_tp`));
+      idx++;
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},${spleefBox},y=16,dy=6] at @s run tp @s -41 9 0`));
+      idx++;
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},${spleefBox},y=16,dy=6] run tag @s add floor_tp`));
+      idx++;
+      // Outside spleef → gallery (default)
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `execute as @a[${ss},tag=!floor_tp] at @s run tp @s ${item.tp}`));
+      idx++;
+      cmds.push(chainBlock(bx + idx, 1, bz, 'east',
+        `tag @a remove floor_tp`));
+      idx++;
+    } else {
+      // Normal: single TP
+      cmds.push(blockFn(bx + idx, 1, bz, 'east',
+        `execute as @a[${stickSel(item.cmd)}] at @s run tp @s ${item.tp}`));
+      idx++;
+    }
+    // Tag for nav refresh (all items)
     cmds.push(chainBlock(bx + idx, 1, bz, 'east',
-      `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] run tag @s add nav_tp`));
+      `execute as @a[${stickSel(item.cmd)}] run tag @s add nav_tp`));
     idx++;
   }
 
@@ -312,7 +348,7 @@ function buildItemSystem() {
   for (const item of BET_ITEMS) {
     const firstBot = FIRST_BOT[item.arena];
     cmds.push(chainBlock(bx + idx, 1, bz, 'east',
-      `execute as @a[scores={use_stick=1..},nbt={SelectedItem:{tag:{CustomModelData:${item.cmd}}}}] run msg ${firstBot} BET:${item.arena}:${item.choice}`));
+      `execute as @a[${stickSel(item.cmd)}] run msg ${firstBot} BET:${item.arena}:${item.choice}`));
     idx++;
   }
 
@@ -349,10 +385,8 @@ function buildSpleefElevator() {
   cmds.push(`fill -42 9 -3 -40 10 -3 glass`);           // end wall (north)
   cmds.push(`fill -42 9 3 -40 10 3 glass`);             // end wall (south)
   cmds.push(`setblock -41 10 0 sea_lantern`);            // lighting
-  // UP button → middle platform (y=13)
-  cmds.push(`setblock -41 10 3 oak_wall_sign[facing=north]{Text1:'{"text":"[UP]","color":"green","bold":true}',Text2:'{"text":"Middle Level"}',Text3:'{"text":"Click button","color":"gray"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock -41 9 3 stone_button[face=wall,facing=north]`);
-  cmds.push(...spectateButton(-41, 8, 3, { x: -41, y: 13, z: 0 }));
+  // Floor info sign (bottom)
+  cmds.push(`setblock -41 10 3 oak_wall_sign[facing=north]{Text1:'{"text":"Floor 1/3","color":"aqua","bold":true}',Text2:'{"text":"Bottom Level"}',Text3:'{"text":"Use Spleef wand","color":"green"}',Text4:'{"text":"to change floor","color":"green"}'}`);
 
   // --- Middle viewing platform (y=12) — above middle snow layer (y=11) ---
   cmds.push(`fill -42 12 -3 -40 12 3 quartz_block`);
@@ -361,19 +395,12 @@ function buildSpleefElevator() {
   cmds.push(`fill -42 13 -3 -40 14 -3 glass`);
   cmds.push(`fill -42 13 3 -40 14 3 glass`);
   cmds.push(`setblock -41 14 0 sea_lantern`);
-  // UP button → gallery floor (y=16)
-  cmds.push(`setblock -41 14 3 oak_wall_sign[facing=north]{Text1:'{"text":"[UP]","color":"green","bold":true}',Text2:'{"text":"Gallery Floor"}',Text3:'{"text":"Click button","color":"gray"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock -41 13 3 stone_button[face=wall,facing=north]`);
-  cmds.push(...spectateButton(-41, 12, 3, { x: -41, y: 16, z: 0 }));
-  // DOWN button → bottom platform (y=9)
-  cmds.push(`setblock -42 14 3 oak_wall_sign[facing=north]{Text1:'{"text":"[DOWN]","color":"red","bold":true}',Text2:'{"text":"Bottom Level"}',Text3:'{"text":"Click button","color":"gray"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock -42 13 3 stone_button[face=wall,facing=north]`);
-  cmds.push(...spectateButton(-42, 12, 3, { x: -41, y: 9, z: 0 }));
+  // Floor info sign (middle)
+  cmds.push(`setblock -41 14 3 oak_wall_sign[facing=north]{Text1:'{"text":"Floor 2/3","color":"aqua","bold":true}',Text2:'{"text":"Middle Level"}',Text3:'{"text":"Use Spleef wand","color":"green"}',Text4:'{"text":"to change floor","color":"green"}'}`);
 
-  // --- Gallery floor (y=15-16, existing) — DOWN button only ---
-  cmds.push(`setblock -41 17 3 oak_wall_sign[facing=north]{Text1:'{"text":"[DOWN]","color":"red","bold":true}',Text2:'{"text":"Middle Level"}',Text3:'{"text":"Click button","color":"gray"}',Text4:'{"text":"below","color":"gray"}'}`);
-  cmds.push(`setblock -41 16 3 stone_button[face=wall,facing=north]`);
-  cmds.push(...spectateButton(-41, 15, 3, { x: -41, y: 13, z: 0 }));
+  // --- Gallery floor (y=15-16, existing) — sign only ---
+  cmds.push(`setblock -41 17 3 oak_wall_sign[facing=north]{Text1:'{"text":"Floor 3/3","color":"aqua","bold":true}',Text2:'{"text":"Gallery Level"}',Text3:'{"text":"Use Spleef wand","color":"green"}',Text4:'{"text":"to change floor","color":"green"}'}`);
+
 
   return cmds;
 }

@@ -1285,21 +1285,21 @@ async function main() {
       const betCount = allBets.length;
       await rcon.send(`team modify sb12 prefix [{"text":"Pool: ","color":"gray"},{"text":"${totalPool}","color":"gold"},{"text":" · Bets: ","color":"dark_gray"},{"text":"${betCount}","color":"aqua"}]`);
 
-      // Top 3 bettors by coin balance
+      // Top 3 bettors by coin balance (medal colors: gold, silver, bronze)
       const coinEntries = Object.entries(playerCoins).sort((a, b) => b[1] - a[1]);
       if (coinEntries.length === 0) {
         await rcon.send(`team modify sb13 prefix [{"text":"No bettors yet","color":"gray","italic":true}]`);
         await rcon.send(`team modify sb14 prefix {"text":""}`);
       } else if (coinEntries.length === 1) {
         const [n1, c1] = coinEntries[0];
-        await rcon.send(`team modify sb13 prefix [{"text":"#1 ","color":"gold"},{"text":"${n1}","color":"white"},{"text":": ${c1}","color":"yellow"}]`);
+        await rcon.send(`team modify sb13 prefix [{"text":"\u2b50 ","color":"gold"},{"text":"${n1}","color":"white","bold":true},{"text":" ${c1}\u00a2","color":"yellow"}]`);
         await rcon.send(`team modify sb14 prefix {"text":""}`);
       } else {
         const [n1, c1] = coinEntries[0];
-        await rcon.send(`team modify sb13 prefix [{"text":"#1 ","color":"gold"},{"text":"${n1}","color":"white"},{"text":": ${c1}","color":"yellow"}]`);
+        await rcon.send(`team modify sb13 prefix [{"text":"\u2b50 ","color":"gold"},{"text":"${n1}","color":"white","bold":true},{"text":" ${c1}\u00a2","color":"yellow"}]`);
         const parts = [];
-        if (coinEntries[1]) { const [n2, c2] = coinEntries[1]; parts.push(`{"text":"#2 ","color":"gray"},{"text":"${n2}","color":"white"},{"text":": ${c2} ","color":"yellow"}`); }
-        if (coinEntries[2]) { const [n3, c3] = coinEntries[2]; parts.push(`{"text":"#3 ","color":"gray"},{"text":"${n3}","color":"white"},{"text":": ${c3}","color":"yellow"}`); }
+        if (coinEntries[1]) { const [n2, c2] = coinEntries[1]; parts.push(`{"text":"2. ","color":"white"},{"text":"${n2}","color":"gray"},{"text":" ${c2}\u00a2 ","color":"white"}`); }
+        if (coinEntries[2]) { const [n3, c3] = coinEntries[2]; parts.push(`{"text":"3. ","color":"white"},{"text":"${n3}","color":"gray"},{"text":" ${c3}\u00a2","color":"white"}`); }
         await rcon.send(`team modify sb14 prefix [${parts.join(',')}]`);
       }
 
