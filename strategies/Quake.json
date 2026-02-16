@@ -1,5 +1,5 @@
 {
-  "name": "Spleef4", "arena": "spleef", "version": 1,
+  "name": "Quake", "arena": "spleef", "version": 1,
   "combat": {
     "chase_distance": 3, "sprint_threshold": 7,
     "dig_radius_x": 4, "dig_radius_z": 4, "dig_depth": 2,

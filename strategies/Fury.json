@@ -1,5 +1,5 @@
 {
-  "name": "Pvp1", "arena": "pvp", "version": 1,
+  "name": "Fury", "arena": "pvp", "version": 1,
   "combat": {
     "attack_range": 3.5, "chase_sprint_distance": 5,
     "strafe_chance": 0.6, "strafe_duration_ms": 200,

@@ -43,32 +43,32 @@ function logToFile(name, msg) {
 
 const BOT_DEFS = [
   // PvP Arena (south, center 0,55)
-  { name: 'Pvp1',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 46 } },
-  { name: 'Pvp2',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 64 } },
-  { name: 'Pvp3',    arena: 'pvp',     spawn: { x: -8, y: 4, z: 55 } },
-  { name: 'Pvp4',    arena: 'pvp',     spawn: { x: 8, y: 4, z: 55 } },
-  { name: 'Pvp5',    arena: 'pvp',     spawn: { x: 0, y: 4, z: 52 } },
+  { name: 'Fury',     arena: 'pvp',     spawn: { x: 0, y: 4, z: 46 } },    // Aggressive
+  { name: 'Bastion',  arena: 'pvp',     spawn: { x: 0, y: 4, z: 64 } },    // Defensive
+  { name: 'Shadow',   arena: 'pvp',     spawn: { x: -8, y: 4, z: 55 } },   // Evasive
+  { name: 'Knight',   arena: 'pvp',     spawn: { x: 8, y: 4, z: 55 } },    // Balanced
+  { name: 'Reaper',   arena: 'pvp',     spawn: { x: 0, y: 4, z: 52 } },    // Glass cannon
 
   // Sumo Arena (east, center 55,0)
-  { name: 'Sumo1',   arena: 'sumo',    spawn: { x: 50, y: 11, z: 5 } },
-  { name: 'Sumo2',   arena: 'sumo',    spawn: { x: 60, y: 11, z: -5 } },
-  { name: 'Sumo3',   arena: 'sumo',    spawn: { x: 55, y: 11, z: 6 } },
-  { name: 'Sumo4',   arena: 'sumo',    spawn: { x: 55, y: 11, z: -6 } },
-  { name: 'Sumo5',   arena: 'sumo',    spawn: { x: 48, y: 11, z: 0 } },
+  { name: 'Rhino',    arena: 'sumo',    spawn: { x: 50, y: 11, z: 5 } },   // Rusher
+  { name: 'Boulder',  arena: 'sumo',    spawn: { x: 60, y: 11, z: -5 } },  // Center control
+  { name: 'Viper',    arena: 'sumo',    spawn: { x: 55, y: 11, z: 6 } },   // Edge fighter
+  { name: 'IronFist', arena: 'sumo',    spawn: { x: 55, y: 11, z: -6 } },  // Combo hitter
+  { name: 'Fortress', arena: 'sumo',    spawn: { x: 48, y: 11, z: 0 } },   // Retreater
 
   // Spleef Arena (west, center -55,0)
-  { name: 'Spleef1', arena: 'spleef',  spawn: { x: -50, y: 16, z: 5 } },
-  { name: 'Spleef2', arena: 'spleef',  spawn: { x: -60, y: 16, z: -5 } },
-  { name: 'Spleef3', arena: 'spleef',  spawn: { x: -50, y: 16, z: -5 } },
-  { name: 'Spleef4', arena: 'spleef',  spawn: { x: -60, y: 16, z: 5 } },
-  { name: 'Spleef5', arena: 'spleef',  spawn: { x: -55, y: 16, z: 0 } },
+  { name: 'Mole',     arena: 'spleef',  spawn: { x: -50, y: 16, z: 5 } },  // Aggressive digger
+  { name: 'Scout',    arena: 'spleef',  spawn: { x: -60, y: 16, z: -5 } }, // Cautious
+  { name: 'Dash',     arena: 'spleef',  spawn: { x: -50, y: 16, z: -5 } }, // Runner
+  { name: 'Quake',    arena: 'spleef',  spawn: { x: -60, y: 16, z: 5 } },  // Wide digger
+  { name: 'Lurker',   arena: 'spleef',  spawn: { x: -55, y: 16, z: 0 } },  // Stalker
 
   // Archery Arena (north, center 0,-55)
-  { name: 'Archer1', arena: 'archery', spawn: { x: 5, y: 4, z: -52 } },
-  { name: 'Archer2', arena: 'archery', spawn: { x: -5, y: 4, z: -58 } },
-  { name: 'Archer3', arena: 'archery', spawn: { x: -10, y: 4, z: -55 } },
-  { name: 'Archer4', arena: 'archery', spawn: { x: 10, y: 4, z: -55 } },
-  { name: 'Archer5', arena: 'archery', spawn: { x: 0, y: 4, z: -55 } },
+  { name: 'Hawkeye',  arena: 'archery', spawn: { x: 5, y: 4, z: -52 } },   // Sniper
+  { name: 'Ranger',   arena: 'archery', spawn: { x: -5, y: 4, z: -58 } },  // Run-and-gun
+  { name: 'Sentinel', arena: 'archery', spawn: { x: -10, y: 4, z: -55 } }, // Camper
+  { name: 'Mirage',   arena: 'archery', spawn: { x: 10, y: 4, z: -55 } },  // Dodger
+  { name: 'Robin',    arena: 'archery', spawn: { x: 0, y: 4, z: -55 } },   // Balanced
 ];
 
 const BOTS_PER_ARENA = 5;

@@ -1,5 +1,5 @@
 {
-  "name": "Spleef3", "arena": "spleef", "version": 1,
+  "name": "Dash", "arena": "spleef", "version": 1,
   "combat": {
     "chase_distance": 6, "sprint_threshold": 4,
     "dig_radius_x": 1, "dig_radius_z": 1, "dig_depth": 1,

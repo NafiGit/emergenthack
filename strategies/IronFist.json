@@ -1,5 +1,5 @@
 {
-  "name": "Sumo4", "arena": "sumo", "version": 1,
+  "name": "IronFist", "arena": "sumo", "version": 1,
   "combat": {
     "center_retreat_threshold": 8, "attack_range": 3.0,
     "sprint_attack": true, "knockback_combo_delay_ms": 50,

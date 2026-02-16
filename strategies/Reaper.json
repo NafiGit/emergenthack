@@ -1,5 +1,5 @@
 {
-  "name": "Pvp5", "arena": "pvp", "version": 1,
+  "name": "Reaper", "arena": "pvp", "version": 1,
   "combat": {
     "attack_range": 4.0, "chase_sprint_distance": 3,
     "strafe_chance": 0.5, "strafe_duration_ms": 200,

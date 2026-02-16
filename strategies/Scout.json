@@ -1,5 +1,5 @@
 {
-  "name": "Spleef2", "arena": "spleef", "version": 1,
+  "name": "Scout", "arena": "spleef", "version": 1,
   "combat": {
     "chase_distance": 5, "sprint_threshold": 7,
     "dig_radius_x": 1, "dig_radius_z": 1, "dig_depth": 2,

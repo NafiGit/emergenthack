@@ -1,5 +1,5 @@
 {
-  "name": "Pvp2", "arena": "pvp", "version": 1,
+  "name": "Bastion", "arena": "pvp", "version": 1,
   "combat": {
     "attack_range": 3.5, "chase_sprint_distance": 5,
     "strafe_chance": 0.4, "strafe_duration_ms": 200,

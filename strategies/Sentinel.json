@@ -1,5 +1,5 @@
 {
-  "name": "Archer3", "arena": "archery", "version": 1,
+  "name": "Sentinel", "arena": "archery", "version": 1,
   "combat": {
     "strafe_chance": 0.1, "strafe_duration_ms": 400,
     "forward_chance": 0.05, "backward_chance": 0.05,

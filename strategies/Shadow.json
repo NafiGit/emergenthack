@@ -1,5 +1,5 @@
 {
-  "name": "Pvp3", "arena": "pvp", "version": 1,
+  "name": "Shadow", "arena": "pvp", "version": 1,
   "combat": {
     "attack_range": 3.0, "chase_sprint_distance": 5,
     "strafe_chance": 0.7, "strafe_duration_ms": 200,

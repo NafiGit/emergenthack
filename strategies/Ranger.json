@@ -1,5 +1,5 @@
 {
-  "name": "Archer2", "arena": "archery", "version": 1,
+  "name": "Ranger", "arena": "archery", "version": 1,
   "combat": {
     "strafe_chance": 0.6, "strafe_duration_ms": 400,
     "forward_chance": 0.3, "backward_chance": 0.25,
