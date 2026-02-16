@@ -358,13 +358,15 @@ function buildItemSystem() {
 
   // --- Chain C: Infinite food + health + no item drops (y=1, x=-20, z=-30) ---
   bx = -20; bz = -30;
-  cmds.push(`fill ${bx} 1 ${bz} ${bx + 2} 1 ${bz} air`);
+  cmds.push(`fill ${bx} 1 ${bz} ${bx + 3} 1 ${bz} air`);
   cmds.push(repeatBlock(bx, 1, bz, 'east',
     `effect give @a[tag=!bot] minecraft:saturation 30 0 true`));
   cmds.push(chainBlock(bx + 1, 1, bz, 'east',
     `effect give @a[tag=!bot] minecraft:resistance 30 4 true`));
   cmds.push(chainBlock(bx + 2, 1, bz, 'east',
     `kill @e[type=item,x=-80,y=0,z=-80,dx=160,dy=30,dz=160]`));
+  cmds.push(chainBlock(bx + 3, 1, bz, 'east',
+    `execute as @a[tag=has_wands] unless entity @s[nbt={Inventory:[{id:"minecraft:carrot_on_a_stick"}]}] run tag @s remove has_wands`));
 
   return cmds;
 }

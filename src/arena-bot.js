@@ -386,6 +386,7 @@ async function arenaGameLoop(arena) {
     await sleep(2000);
     try {
       await rcon.send(`tp @a[tag=bettor_${arena}] ${HUB_POS.x} ${HUB_POS.y} ${HUB_POS.z}`);
+      await rcon.send(`tag @a[tag=bettor_${arena}] remove has_wands`);
       await rcon.send(`tag @a[tag=bettor_${arena}] remove bettor_${arena}`);
     } catch {}
 
