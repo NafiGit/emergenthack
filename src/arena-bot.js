@@ -75,9 +75,26 @@ const playerCoins = {};   // playerName → coin balance
 const activeBets = { pvp: {}, sumo: {}, spleef: {}, archery: {} };
 const bettingOpen = { pvp: false, sumo: false, spleef: false, archery: false };
 const chatDedup = new Set(); // prevent duplicate chat processing across bots
+const BETTING_DURATION = 15; // configurable betting period in seconds
+
+// Gallery bounding box RCON selectors (outer bounds of spectator corridors)
+const GALLERY_SELECTORS = {
+  pvp:     'x=-15,y=3,z=40,dx=30,dy=5,dz=30',
+  sumo:    'x=40,y=10,z=-15,dx=30,dy=5,dz=30',
+  spleef:  'x=-70,y=15,z=-15,dx=30,dy=6,dz=30',
+  archery: 'x=-17,y=3,z=-65,dx=34,dy=5,dz=20',
+};
+
+// Gallery TP-back positions (for bettor lock enforcement)
+const GALLERY_TP = {
+  pvp:     '14 4 41',
+  sumo:    '41 11 -14',
+  spleef:  '-41 16 -14',
+  archery: '16 4 -46',
+};
 
 // ─── Match Lifecycle — one self-driving game loop per arena ─────
-// States: WAITING → COUNTDOWN → ACTIVE → ENDING → RESETTING → WAITING
+// States: WAITING → COUNTDOWN → BETTING → ACTIVE → ENDING → RESETTING → WAITING
 const arenaMatches = {
   pvp:     { state: 'WAITING', startTime: 0, winner: null, matchNum: 0 },
   sumo:    { state: 'WAITING', startTime: 0, winner: null, matchNum: 0 },
@@ -140,11 +157,8 @@ async function arenaGameLoop(arena) {
     // Reset command block timer to prevent conflict with game loop lifecycle
     try { await rcon.send(`scoreboard players set ${arena}_t timer 0`); } catch {}
 
-    // Open betting for this arena
-    bettingOpen[arena] = true;
-    try {
-      await rcon.send(`say [BETTING] ${arena.toUpperCase()} #${match.matchNum}: ${bots[0].name} vs ${bots[1].name} — type !bet ${bots[0].name} or !bet ${bots[1].name}`);
-    } catch {}
+    // Clean up stale bettor tags from previous match
+    try { await rcon.send(`tag @a[tag=bettor_${arena}] remove bettor_${arena}`); } catch {}
 
     // Freeze bots at spawn
     for (const def of bots) {
@@ -165,21 +179,73 @@ async function arenaGameLoop(arena) {
       console.log(`[${ts()}] [${arena.toUpperCase()}] ${i}...`);
       await sleep(1000);
     }
+
+    // ── BETTING: open betting for gallery spectators ──
+    match.state = 'BETTING';
+    bettingOpen[arena] = true;
+    const galSel = `@a[tag=!bot,${GALLERY_SELECTORS[arena]}]`;
+
+    try {
+      await rcon.send(`title ${galSel} title {"text":"BETTING OPEN","color":"gold","bold":true}`);
+      await rcon.send(`title ${galSel} subtitle {"text":"${bots[0].name} vs ${bots[1].name}","color":"white"}`);
+      const tellrawParts = [
+        {"text":"\n"},
+        {"text":"═══ PLACE YOUR BET ═══","color":"gold","bold":true},
+        {"text":"\n\n "},
+        {"text":`[${bots[0].name}]`,"color":"green","bold":true,
+         "clickEvent":{"action":"run_command","value":`/msg ${bots[0].name} BET:${arena}:1`},
+         "hoverEvent":{"action":"show_text","value":`Bet ${DEFAULT_BET} coins on ${bots[0].name}`}},
+        {"text":"  vs  ","color":"gray"},
+        {"text":`[${bots[1].name}]`,"color":"red","bold":true,
+         "clickEvent":{"action":"run_command","value":`/msg ${bots[0].name} BET:${arena}:2`},
+         "hoverEvent":{"action":"show_text","value":`Bet ${DEFAULT_BET} coins on ${bots[1].name}`}},
+        {"text":"\n"},
+        {"text":`${DEFAULT_BET} coins per bet · Click to place`,"color":"gray","italic":true},
+        {"text":"\n"}
+      ];
+      await rcon.send(`tellraw ${galSel} ${JSON.stringify(tellrawParts)}`);
+    } catch {}
+
+    console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — BETTING (${BETTING_DURATION}s)`);
+
+    for (let i = BETTING_DURATION; i > 0; i--) {
+      const color = i <= 5 ? 'red' : i <= 10 ? 'gold' : 'yellow';
+      try { await rcon.send(`title ${galSel} actionbar {"text":"Betting closes in ${i}s","color":"${color}"}`); } catch {}
+      await sleep(1000);
+    }
+
+    bettingOpen[arena] = false;
+    try { await rcon.send(`title ${galSel} actionbar {"text":"BETS LOCKED!","color":"red","bold":true}`); } catch {}
+
+    // Tag bettors for lock enforcement during match
+    for (const playerName of Object.keys(activeBets[arena])) {
+      try { await rcon.send(`tag ${playerName} add bettor_${arena}`); } catch {}
+    }
+
+    // ── FIGHT! ──
     for (const def of bots) {
       try {
         await rcon.send(`title ${def.name} title {"text":"FIGHT!","color":"green","bold":true}`);
         await rcon.send(`title ${def.name} subtitle {"text":"Match #${match.matchNum}","color":"gray"}`);
       } catch {}
     }
+    // Also announce to gallery spectators
+    try { await rcon.send(`title ${galSel} title {"text":"FIGHT!","color":"green","bold":true}`); } catch {}
 
     // ── ACTIVE: enable combat, wait for match end signal or timeout ──
     match.state = 'ACTIVE';
     match.startTime = Date.now();
-    bettingOpen[arena] = false; // Lock bets
     for (const def of bots) {
       if (botStats[def.name]) botStats[def.name].active = true;
     }
     console.log(`[${ts()}] [${arena.toUpperCase()}] Match #${match.matchNum} — FIGHT!`);
+
+    // Bettor lock — TP escapees back to gallery every 3s
+    const bettorLockInterval = setInterval(async () => {
+      try {
+        await rcon.send(`execute as @a[tag=bettor_${arena}] unless entity @s[${GALLERY_SELECTORS[arena]}] run tp @s ${GALLERY_TP[arena]}`);
+      } catch {}
+    }, 3000);
 
     // Race: match-end signal vs timeout vs time announcements
     let cleanupTimers = null;
@@ -221,6 +287,7 @@ async function arenaGameLoop(arena) {
 
     // Clean up timers on early match end (death/fall before 2 min)
     if (cleanupTimers) cleanupTimers();
+    clearInterval(bettorLockInterval);
 
     // ── ENDING: stop combat, announce winner ──
     match.state = 'ENDING';
@@ -250,7 +317,16 @@ async function arenaGameLoop(arena) {
     // Process betting payouts
     await processBetPayouts(arena, result.winner);
 
-    await sleep(3000); // Show result
+    // TP bettors back to hub after showing results
+    await sleep(3000);
+    try {
+      await rcon.send(`title @a[tag=bettor_${arena}] title {"text":"Returning to Hub","color":"aqua"}`);
+    } catch {}
+    await sleep(2000);
+    try {
+      await rcon.send(`tp @a[tag=bettor_${arena}] ${HUB_POS.x} ${HUB_POS.y} ${HUB_POS.z}`);
+      await rcon.send(`tag @a[tag=bettor_${arena}] remove bettor_${arena}`);
+    } catch {}
 
     // ── RESETTING: regen terrain, clean entities, heal, regive items ──
     match.state = 'RESETTING';
@@ -370,6 +446,40 @@ async function handleBet(playerName, message) {
     await rcon.send(`tell ${playerName} Bet: ${amount} coins on ${botDef.name}! Balance: ${playerCoins[playerName]}`);
   } catch {}
   console.log(`[${ts()}] [BET] ${playerName} bet ${amount} on ${botDef.name} (${botDef.arena})`);
+}
+
+async function handleGuiBet(playerName, arena, botName) {
+  if (!bettingOpen[arena]) {
+    try { await rcon.send(`title ${playerName} actionbar {"text":"Betting is closed!","color":"red"}`); } catch {}
+    return;
+  }
+
+  // Initialize player if new
+  if (playerCoins[playerName] === undefined) {
+    playerCoins[playerName] = STARTING_COINS;
+    try { await rcon.send(`scoreboard players set ${playerName} coins ${STARTING_COINS}`); } catch {}
+  }
+
+  // Check balance
+  if (playerCoins[playerName] < DEFAULT_BET) {
+    try { await rcon.send(`title ${playerName} actionbar {"text":"Not enough coins! Balance: ${playerCoins[playerName]}","color":"red"}`); } catch {}
+    return;
+  }
+
+  // Cancel existing bet on same arena (refund)
+  if (activeBets[arena][playerName]) {
+    playerCoins[playerName] += activeBets[arena][playerName].amount;
+  }
+
+  // Place bet
+  playerCoins[playerName] -= DEFAULT_BET;
+  activeBets[arena][playerName] = { bot: botName, amount: DEFAULT_BET };
+
+  try {
+    await rcon.send(`scoreboard players set ${playerName} coins ${playerCoins[playerName]}`);
+    await rcon.send(`title ${playerName} actionbar {"text":"Bet placed! ${DEFAULT_BET} coins on ${botName}","color":"green"}`);
+  } catch {}
+  console.log(`[${ts()}] [BET-GUI] ${playerName} bet ${DEFAULT_BET} on ${botName} (${arena})`);
 }
 
 async function showBalance(playerName) {
@@ -824,7 +934,7 @@ function createArenaBot(def) {
     botStats[name].active = false; // Inactive until match lifecycle starts
     botInstances[name] = bot;
 
-    // Betting chat listener (dedup across all bots seeing same message)
+    // Chat listener — !bet (legacy) and !coins
     bot.on('chat', (username, msg) => {
       if (BOT_DEFS.some(d => d.name === username)) return;
       const key = `${username}:${msg}:${Math.floor(Date.now() / 1000)}`;
@@ -833,6 +943,20 @@ function createArenaBot(def) {
       setTimeout(() => chatDedup.delete(key), 2000);
       if (msg.startsWith('!bet')) handleBet(username, msg);
       else if (msg === '!coins' || msg === '!balance') showBalance(username);
+    });
+
+    // GUI betting — whisper handler for clickable tellraw (sends /msg to Bot1)
+    bot.on('whisper', (username, msg) => {
+      if (BOT_DEFS.some(d => d.name === username)) return;
+      if (!msg.startsWith('BET:')) return;
+      const parts = msg.split(':');
+      if (parts.length < 3) return;
+      const betArena = parts[1];
+      const choice = parseInt(parts[2]);
+      if (!betArena || isNaN(choice) || choice < 1 || choice > 2) return;
+      const arenaBots = BOT_DEFS.filter(d => d.arena === betArena);
+      if (!arenaBots.length) return;
+      handleGuiBet(username, betArena, arenaBots[choice - 1].name);
     });
 
     // Start combat loop (250ms) — only ticks during ACTIVE match state
@@ -976,11 +1100,12 @@ async function main() {
   await rcon.send('fill -66 15 -11 -44 15 11 snow_block');
   console.log('Spleef snow regenerated\n');
 
-  // OP all bots
+  // OP all bots + tag for gallery selector exclusion
   for (const def of BOT_DEFS) {
     try { await rcon.send(`op ${def.name}`); } catch {}
+    try { await rcon.send(`tag ${def.name} add bot`); } catch {}
   }
-  console.log('All bots OP\'d\n');
+  console.log('All bots OP\'d + tagged\n');
 
   // Spawn first bot of each pair
   console.log('Spawning first wave (4 bots)...\n');
@@ -1051,7 +1176,7 @@ async function main() {
       // Line 4: per-arena match state
       const arenaStates = ['pvp', 'sumo', 'spleef', 'archery'].map(a => {
         const m = arenaMatches[a];
-        const st = m.state === 'ACTIVE' ? 'green' : m.state === 'COUNTDOWN' ? 'yellow' : 'gray';
+        const st = m.state === 'ACTIVE' ? 'green' : m.state === 'BETTING' ? 'gold' : m.state === 'COUNTDOWN' ? 'yellow' : 'gray';
         return `{"text":"${a[0].toUpperCase()}${m.matchNum}","color":"${st}"}`;
       }).join(',{"text":" ","color":"gray"},');
       await rcon.send(`team modify sb04 prefix [${arenaStates}]`);

@@ -402,7 +402,7 @@ function setupScoreboards() {
     'team modify sb13 prefix [{"text":"── ","color":"dark_gray"},{"text":"BETTING","color":"light_purple","bold":true},{"text":" ──","color":"dark_gray"}]',
     'team modify sb14 prefix [{"text":"Bets: ","color":"gray"},{"text":"0","color":"aqua"},{"text":" Pool: ","color":"gray"},{"text":"0","color":"gold"}]',
     'team modify sb15 prefix [{"text":"No bettors yet","color":"gray","italic":true}]',
-    'team modify sb16 prefix [{"text":"!bet <bot> | !coins","color":"dark_gray","italic":true}]',
+    'team modify sb16 prefix [{"text":"Spectate to bet!","color":"dark_gray","italic":true}]',
 
     // Show death messages for kill tracking
     'gamerule showDeathMessages true',
@@ -483,8 +483,8 @@ function buildHub() {
   // Branding signs (4 faces)
   cmds.push(`setblock ${cx} ${Y+4} ${cz-2} oak_wall_sign[facing=north]{Text1:'{"text":"MINEFORGE","color":"gold","bold":true}',Text2:'{"text":"Arena Village","color":"white"}',Text3:'{"text":"Spectate & Bet","color":"gray"}',Text4:'{"text":"on bot fights!","color":"gray"}'}`);
   cmds.push(`setblock ${cx} ${Y+4} ${cz+2} oak_wall_sign[facing=south]{Text1:'{"text":"MINEFORGE","color":"gold","bold":true}',Text2:'{"text":"Arena Village","color":"white"}',Text3:'{"text":"Spectate & Bet","color":"gray"}',Text4:'{"text":"on bot fights!","color":"gray"}'}`);
-  cmds.push(`setblock ${cx+2} ${Y+4} ${cz} oak_wall_sign[facing=east]{Text1:'{"text":"BETTING","color":"light_purple","bold":true}',Text2:'{"text":"Type in chat:","color":"white"}',Text3:'{"text":"!bet <bot>","color":"aqua"}',Text4:'{"text":"!coins = balance","color":"gray"}'}`);
-  cmds.push(`setblock ${cx-2} ${Y+4} ${cz} oak_wall_sign[facing=west]{Text1:'{"text":"BETTING","color":"light_purple","bold":true}',Text2:'{"text":"!bet 10 Pvp1","color":"aqua"}',Text3:'{"text":"Win = 2x payout","color":"green"}',Text4:'{"text":"Start: 100 coins","color":"gray"}'}`);
+  cmds.push(`setblock ${cx+2} ${Y+4} ${cz} oak_wall_sign[facing=east]{Text1:'{"text":"BETTING","color":"light_purple","bold":true}',Text2:'{"text":"Spectate a game","color":"white"}',Text3:'{"text":"Click to bet!","color":"aqua"}',Text4:'{"text":"!coins = balance","color":"gray"}'}`);
+  cmds.push(`setblock ${cx-2} ${Y+4} ${cz} oak_wall_sign[facing=west]{Text1:'{"text":"BETTING","color":"light_purple","bold":true}',Text2:'{"text":"15s betting phase","color":"white"}',Text3:'{"text":"Win = 2x payout","color":"green"}',Text4:'{"text":"Start: 100 coins","color":"gray"}'}`);
 
   // ─── Spectate Stations (one per wall) ───
 
