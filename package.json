@@ -5,16 +5,14 @@
   "type": "module",
   "scripts": {
     "start-minecraft-server": "node server/start-server.js",
-    "start-ai-agents": "node src/demo.js",
     "start-api-server": "node src/api-server.js",
     "start-web-client": "cd web-client && pnpm start",
-    "start-spectator-viewer": "echo 'Prismarine spectator viewers start automatically with agents on ports 3002-3004'",
+    "start-spectator-viewer": "echo 'Prismarine spectator viewers: port 3007 (API server base_bot)'",
     "build-arena-village": "node src/build-arena-village.js",
     "start-arena-bot": "node src/arena-bot.js",
     "test-arenas": "node src/test-arenas.js"
   },
   "dependencies": {
-    "axios": "^1.6.7",
     "canvas": "^3.2.1",
     "dotenv": "^16.4.0",
     "ethers": "^6.16.0",

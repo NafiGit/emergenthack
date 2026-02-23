@@ -1,0 +1,135 @@
+#cloud-config
+package_update: true
+packages:
+  - openjdk-17-jre-headless
+  - git
+  - tmux
+  - nginx
+
+runcmd:
+  # Install Node 18
+  - curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+  - apt-get install -y nodejs
+  - npm install -g pnpm
+
+  # Clone repo
+  - git clone --recursive https://github.com/NafiGit/EmergentAIHack.git /opt/mineforge
+  - cd /opt/mineforge && npm install
+  - cd /opt/mineforge/web-client && pnpm install && pnpm build
+
+  # Write .env
+  - |
+    cat > /opt/mineforge/.env << 'ENVEOF'
+    MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+    MONAD_REWARD_AMOUNT=0.001
+    ENVEOF
+
+  # Create systemd services
+  - |
+    cat > /etc/systemd/system/mineforge-mc.service << 'EOF'
+    [Unit]
+    Description=MineForge Minecraft Server
+    After=network.target
+
+    [Service]
+    Type=simple
+    WorkingDirectory=/opt/mineforge
+    ExecStart=/usr/bin/node server/start-server.js
+    Restart=on-failure
+    RestartSec=10
+    Environment=NODE_ENV=production
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - |
+    cat > /etc/systemd/system/mineforge-arena.service << 'EOF'
+    [Unit]
+    Description=MineForge Arena Bots
+    After=mineforge-mc.service
+    Requires=mineforge-mc.service
+
+    [Service]
+    Type=simple
+    WorkingDirectory=/opt/mineforge
+    ExecStartPre=/bin/sleep 30
+    ExecStart=/usr/bin/node src/arena-bot.js
+    Restart=on-failure
+    RestartSec=15
+    EnvironmentFile=/opt/mineforge/.env
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - |
+    cat > /etc/systemd/system/mineforge-web.service << 'EOF'
+    [Unit]
+    Description=MineForge Web Client
+    After=mineforge-mc.service
+
+    [Service]
+    Type=simple
+    WorkingDirectory=/opt/mineforge
+    ExecStart=/usr/bin/node web-client/server.js --prod
+    Restart=on-failure
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - |
+    cat > /etc/systemd/system/mineforge-api.service << 'EOF'
+    [Unit]
+    Description=MineForge API Server
+    After=mineforge-mc.service
+
+    [Service]
+    Type=simple
+    WorkingDirectory=/opt/mineforge
+    ExecStart=/usr/bin/node src/api-server.js
+    Restart=on-failure
+    RestartSec=10
+    EnvironmentFile=/opt/mineforge/.env
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  # Nginx reverse proxy (HTTPS via Let's Encrypt later, or just port 80 for now)
+  - |
+    cat > /etc/nginx/sites-available/mineforge << 'EOF'
+    server {
+        listen 80;
+        server_name _;
+
+        # Web client
+        location / {
+            proxy_pass http://127.0.0.1:9112;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+        }
+
+        # API
+        location /api/ {
+            proxy_pass http://127.0.0.1:4000/;
+        }
+    }
+    EOF
+
+  - ln -sf /etc/nginx/sites-available/mineforge /etc/nginx/sites-enabled/
+  - rm -f /etc/nginx/sites-enabled/default
+  - systemctl restart nginx
+
+  # Enable and start all services
+  - systemctl daemon-reload
+  - systemctl enable mineforge-mc mineforge-arena mineforge-web mineforge-api
+  - systemctl start mineforge-mc
+  - sleep 30
+  - systemctl start mineforge-web mineforge-api
+  - systemctl start mineforge-arena
